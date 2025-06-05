@@ -7,7 +7,7 @@ import { usePDFContext } from '../contexts/PDFContext';
 import PinMarker from './PinMarker';
 import AnnotationPanel from './AnnotationPanel';
 import DialogModel from './DialogModel';
-
+import { nanoid } from 'nanoid';
 export interface PinDetailEntity {
   pageNumber: number;
   x: number;
@@ -213,7 +213,7 @@ const PDFViewer: React.FC = () => {
           <button
             className={`fixed bottom-6 left-6 p-3 rounded-full shadow-lg z-10 ${isPinningMode ? 'bg-accent text-white' : 'bg-white text-gray-700'
               }`}
-            onClick={() => setIsPinningMode(!isPinningMode)}
+            onClick={() => { setIsPinningMode(!isPinningMode); setSelectedPin(null) }}
             title={isPinningMode ? 'Cancel adding pin' : 'Add a new pin'}
           >
             <PinIcon size={20} />
@@ -221,7 +221,7 @@ const PDFViewer: React.FC = () => {
         </div>
 
         <AnnotationPanel width={sidebarWidth} setWidth={setSidebarWidth} />
-        <DialogModel isOpen={isOpen} onClose={handleClose} setPinDetail={setPinDetail} pinDetail={pinDetail} />
+        <DialogModel key={nanoid()} isOpen={isOpen} onClose={handleClose} setPinDetail={setPinDetail} pinDetail={pinDetail} />
       </div>
     </>
   );

@@ -3,7 +3,7 @@ import { X, Trash2, ChevronLeft, ChevronRight, PinIcon } from 'lucide-react';
 import { usePDFContext } from '../contexts/PDFContext';
 import ColorPicker from './ColorPicker';
 import DialogModel from './DialogModel';
-
+import { nanoid } from 'nanoid';
 interface AnnotationPanelProps {
   width: number;
   setWidth: (width: number) => void;
@@ -50,11 +50,10 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth }) =>
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = (id: string) => {
     // if (selectedPin && confirm('Are you sure you want to delete this pin?')) {
-    if (selectedPin) {
-      deletePin(selectedPin);
-    }
+
+    deletePin(id);
     // }
   };
 
@@ -106,16 +105,17 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth }) =>
                   <div
                     key={pin.id}
                     className="p-4 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => { setSelectedPin(pin.id); setIsDialog(true) }}
                   >
-                    <div className="flex items-center gap-2">
-                      <div className='flex items-end'>
-                        <PinIcon size={20} color={pin.color} className='-rotate-45 ' />
+                    <div className="flex items-center ">
+                      <div className='flex items-center gap-2 flex-grow' onClick={() => { setSelectedPin(pin.id); setIsDialog(true) }}>
+                        <div className='flex items-end'>
+                          <PinIcon size={20} color={pin.color} className='-rotate-45 ' />
+                        </div>
+                        <div className="font-medium flex-grow ">{pin.title}</div>
                       </div>
-                      <div className="font-medium flex-grow">{pin.title}</div>
-                      <div>
-                        <Trash2 color="red" size={20} onClick={handleDelete} />
-                      </div>
+                      <button onClick={() => handleDelete(pin.id)}>
+                        <Trash2 color="red" size={20} />
+                      </button>
                     </div>
                   </div>
                 ))}

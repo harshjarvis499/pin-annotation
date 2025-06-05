@@ -80,7 +80,7 @@ const DialogModel: React.FC<DialogModelPropEntity> = ({ isOpen, onClose, pinDeta
         }
     }, [selectedPin])
     return (
-        <Dialog header="Pin Detail" visible={isOpen} style={{ width: '50vw' }} onHide={() => { onClose(); if (setPinDetail) { setPinDetail(null) } }}>
+        <Dialog header="Pin Detail" visible={isOpen} style={{ width: '50vw' }} onHide={() => { onClose(); if (setPinDetail) { setPinDetail(null) }; setSelectedPin(null) }}>
             <div className="mx-4">
                 <div className="mb-5">
                     <label htmlFor="title" className="block mb-2 text-sm font-medium">Title</label>
