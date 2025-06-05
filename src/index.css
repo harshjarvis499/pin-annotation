@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: 0 102 204;
+    --color-secondary: 64 156 255;
+    --color-accent: 255 59 48;
+    --color-success: 52 199 89;
+    --color-warning: 255 149 0;
+    --color-error: 255 59 48;
+  }
+
+  body {
+    @apply font-sans text-gray-900 antialiased;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-primary/90 focus:ring-primary/50;
+  }
+
+  .btn-secondary {
+    @apply bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-500/40;
+  }
+
+  .pin {
+    @apply absolute cursor-pointer transition-all duration-300;
+    pointer-events: all;
+  }
+
+  .pin-marker {
+    @apply rounded-full bg-accent/90 border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-xs;
+  }
+}
+
+.pdf-container {
+  @apply relative overflow-auto flex-1 bg-gray-100;
+}
+
+.pin-tooltip {
+  @apply absolute z-50 bg-white rounded-lg shadow-lg p-3 text-sm border border-gray-200;
+  pointer-events: none;
+}
+
+.annotator-sidebar {
+  @apply bg-white border-l border-gray-200 flex flex-col h-full transition-all duration-300 ease-in-out overflow-hidden;
+}
+
+.zoom-controls {
+  @apply fixed bottom-6 right-6 bg-white rounded-full shadow-lg flex items-center p-1 z-10;
+}
+
+.pdf-page {
+  @apply relative mx-auto my-4 shadow-md bg-white;
+}
+
+.page-controls {
+  @apply fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white rounded-full shadow-lg flex items-center p-1 z-10;
+}
+
+/* Animation for pins */
+@keyframes pinPulse {
+  0% {
+    transform: scale(1) translate(-50%, -50%);
+  }
+  50% {
+    transform: scale(1.1) translate(-45%, -45%);
+  }
+  100% {
+    transform: scale(1) translate(-50%, -50%);
+  }
+}
+
+.pin-new {
+  animation: pinPulse 1s ease-in-out;
+}
