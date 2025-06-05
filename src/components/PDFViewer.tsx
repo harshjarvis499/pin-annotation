@@ -17,7 +17,7 @@ export interface PinDetailEntity {
 const PDFViewer: React.FC = () => {
   const {
     pdfUrl, pins, addPin, currentPage, setCurrentPage,
-    totalPages, setTotalPages, scale, setScale
+    totalPages, setTotalPages, scale, setScale, setSelectedPin
   } = usePDFContext();
   const [pdfDimensions, setPdfDimensions] = useState({ width: 0, height: 0 });
   const [sidebarWidth, setSidebarWidth] = useState(320);
@@ -84,9 +84,8 @@ const PDFViewer: React.FC = () => {
         x: xPercent,
         y: yPercent
       });
-
+      setSelectedPin(null);
       setIsOpen(true)
-
       setIsPinningMode(false);
     }
   };
