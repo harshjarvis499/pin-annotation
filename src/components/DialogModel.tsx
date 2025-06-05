@@ -51,7 +51,6 @@ const DialogModel: React.FC<DialogModelPropEntity> = ({ isOpen, onClose, pinDeta
                 description: formDetail.description,
                 title: formDetail.title
             });
-            setSelectedPin(null);
         } else {
             addPin({
                 pageNumber: pinDetail ? pinDetail.pageNumber : 0,
@@ -62,8 +61,10 @@ const DialogModel: React.FC<DialogModelPropEntity> = ({ isOpen, onClose, pinDeta
                 description: formDetail.description
             });
         }
+        setSelectedPin(null);
         handleClear();
         onClose();
+
     }
 
     useEffect(() => {
