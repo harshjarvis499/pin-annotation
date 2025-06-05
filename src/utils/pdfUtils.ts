@@ -57,7 +57,7 @@ export async function downloadPDFWithPins(pdfUrl: string, pins: Pin[], scale: nu
                         x: x - 10,  // Center of path
                         y: y + 10,  // Bottom tip of path
                         scale: 0.8,
-                        color: rgb(0.2, 0.4, 0.6),       // Fill color
+                        color: rgbColor,       // Fill color
                         borderColor: rgb(0, 0, 0),       // Stroke color
                         borderWidth: 1,
                     })

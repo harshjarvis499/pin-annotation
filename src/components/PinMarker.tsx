@@ -3,6 +3,8 @@ import { usePDFContext } from '../contexts/PDFContext';
 import { Pin } from '../contexts/PDFContext';
 import { Pin as PinIcon } from 'lucide-react';
 
+import PinImg from "../../public/pin.svg"
+
 interface PinMarkerProps {
   pin: Pin;
   pdfDimensions: { width: number; height: number };
@@ -46,7 +48,7 @@ const PinMarker: React.FC<PinMarkerProps> = ({ pin, pdfDimensions }) => {
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
-      <PinIcon color='#FF0000' />
+      <img src={PinImg} />
 
       {showTooltip && (
         <div
