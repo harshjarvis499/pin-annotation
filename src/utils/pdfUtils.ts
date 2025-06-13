@@ -9,11 +9,18 @@ const PIN_PATH = 'M12 0C7.6 0 4 3.6 4 8c0 5.3 8 16 8 16s8-10.7 8-16c0-4.4-3.6-8-
 const PIN_WIDTH = 24;  // Width of the SVG viewbox
 const PIN_HEIGHT = 24; // Height of the SVG viewbox
 
-function adjustCoordinatesForRotation(x: number, y: number, width: number, height: number, rotation: number): { x: number, y: number } {
+
+function adjustCoordinatesForRotation(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    rotation: number
+): { x: number, y: number } {
     // Convert degrees to radians
     const rad = (rotation * Math.PI) / 180;
 
-    console.log("rad", rad)
+    console.log("rad", rad);
 
     // Calculate the center of the page
     const centerX = width / 2;
@@ -23,9 +30,79 @@ function adjustCoordinatesForRotation(x: number, y: number, width: number, heigh
     const transX = x - centerX;
     const transY = y - centerY;
 
+    console.log("height", height);
+
     // Rotate point
-    const rotX = transX * Math.cos(rad) - transY * Math.sin(rad);
-    const rotY = transX * Math.sin(rad) + transY * Math.cos(rad);
+    let rotX = transX * Math.cos(rad) - transY * Math.sin(rad);
+    let rotY = transX * Math.sin(rad) + transY * Math.cos(rad);
+
+    console.log("rotY", rotY);
+    console.log("rotX", rotX);
+
+    // Adjust Y if rotY is too far down
+    // if (rotY > 150) {
+    //     let adjustmentPercent = 0.054 + ((rotY - 150) / 3000); // Linearly increase
+    //     adjustmentPercent = Math.min(adjustmentPercent, 0.09); // Cap at 10%
+    //     const adjustment = height * adjustmentPercent;
+    //     console.log(`Adjusting Y down by ${adjustmentPercent * 100}% (${adjustment}px)`);
+    //     rotY += adjustment;
+    // }
+    // // Adjust Y if rotY is too far up (negative)
+    // else if (rotY < -10) {
+    //     let adjustmentPercent = 0.054 + ((-rotY - 150) / 3000); // Linearly increase
+    //     adjustmentPercent = Math.min(adjustmentPercent, 0.1); // Cap at 10%
+    //     const adjustment = height * adjustmentPercent;
+    //     console.log(`Adjusting Y down (from top) by ${adjustmentPercent * 100}% (${adjustment}px)`);
+    //     rotY -= adjustment; // pushing it downward
+    // }
+
+    if (rotY < -100) {
+        let adjustmentPercentForY = 0.055 + ((-rotY - 150) / 3000); // Linearly increase
+        adjustmentPercentForY = Math.min(adjustmentPercentForY, 0.1); // Cap at 10%
+        const adjustment = height * adjustmentPercentForY;
+        console.log(`Adjusting Y down (from top) by ${adjustmentPercentForY * 100}% (${adjustment}px)`);
+        rotY -= adjustment; // pushing it downward
+
+    } else {
+        let adjustmentPercentForY = 0.050 + ((-rotY - 150) / 3000); // Linearly increase
+        adjustmentPercentForY = Math.min(adjustmentPercentForY, 0.1); // Cap at 10%
+        const adjustment = height * adjustmentPercentForY;
+        console.log(`Adjusting Y down (from top) by ${adjustmentPercentForY * 100}% (${adjustment}px)`);
+        rotY -= adjustment; // pushing it downward
+    }
+
+    // Adjust X if rotX is too far left
+    if (rotX < -300 && rotX < -250) {
+        let adjustmentPercent = (rotX < -350 ? 0.08 : 0.07) + ((-rotX - 100) / 3000); // increase with how far left
+        adjustmentPercent = Math.min(adjustmentPercent, (rotX < -350 ? 0.122 : 0.114)); // Cap at 10%
+        const adjustment = width * adjustmentPercent;
+        console.log(`Adjusting X right by test ${adjustmentPercent * 100}% (${adjustment}px)`);
+        rotX += adjustment; // pushing it to the right
+    }
+    else if (rotX < -250 && rotX < -200) {
+        let adjustmentPercent = 0.1 + ((-rotX - 100) / 3000); // increase with how far left
+        adjustmentPercent = Math.min(adjustmentPercent, 0.118); // Cap at 10%
+        const adjustment = width * adjustmentPercent;
+        console.log(`Adjusting X right by test ${adjustmentPercent * 100}% (${adjustment}px)`);
+        rotX += adjustment; // pushing it to the right
+    }
+    else if (rotX < -150 && rotX < -100) {
+
+        let adjustmentPercent = 0.05 + ((-rotX - 100) / 3000); // increase with how far left
+        adjustmentPercent = Math.min(adjustmentPercent, 0.1); // Cap at 10%
+        const adjustment = width * adjustmentPercent;
+        console.log(`Adjusting X right by ${adjustmentPercent * 100}% (${adjustment}px)`);
+        rotX += adjustment; // pushing it to the right
+    }
+    else if ((rotX < -100 || rotX > -100) && rotX > -150) {
+        let adjustmentPercent = 0.04 + ((-rotX - 100) / 3000); // increase with how far left
+        adjustmentPercent = Math.min(adjustmentPercent, 0.1); // Cap at 10%
+        const adjustment = width * adjustmentPercent;
+        console.log(`Adjusting X right by ${adjustmentPercent * 100}% (${adjustment}px)`);
+        rotX += adjustment; // pushing it to the right
+    }
+
+
 
     // Translate back
     return {
@@ -33,6 +110,8 @@ function adjustCoordinatesForRotation(x: number, y: number, width: number, heigh
         y: rotY + centerY
     };
 }
+
+
 
 export async function downloadPDFWithPins(pdfUrl: string, pins: Pin[], scale: number = 1) {
     try {
@@ -69,11 +148,9 @@ export async function downloadPDFWithPins(pdfUrl: string, pins: Pin[], scale: nu
                     const pinScale = 0.8 * scale;
                     const scaledPinWidth = PIN_WIDTH * pinScale / 2;  // Divide by 2 for better centering
                     const scaledPinHeight = PIN_HEIGHT * pinScale / 2;
-                    const verticalOffset = 0; // Increased downward offset from 10 to 25
-                    const horizontalOffset = 0; // Increased downward offset from 10 to 25
 
-                    x = x - scaledPinWidth - horizontalOffset;
-                    y = y + scaledPinHeight - verticalOffset; // Move further down
+                    x = x - scaledPinWidth;
+                    y = y + scaledPinHeight; // Move further down
 
                     // Apply rotation if needed
                     if (rotation !== 0) {
