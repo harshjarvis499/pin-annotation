@@ -8,13 +8,20 @@ import PinMarker from './PinMarker';
 import AnnotationPanel from './AnnotationPanel';
 import DialogModel from './DialogModel';
 import { nanoid } from 'nanoid';
+import { downloadKeyPointPDF, downloadCombinedKeyPointsPDF } from '../utils/keyPointPdf';
+import { downloadPDFWithPins } from '../utils/pdfUtils';
+
 export interface PinDetailEntity {
   pageNumber: number;
   x: number;
   y: number;
 }
 
-const PDFViewer: React.FC = () => {
+interface PDFViewerProps {
+  pageRef: React.RefObject<HTMLDivElement>;
+}
+
+const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
   const {
     pdfUrl, pins, addPin, currentPage, setCurrentPage,
     totalPages, setTotalPages, scale, setScale, setSelectedPin
@@ -25,7 +32,6 @@ const PDFViewer: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<Error | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const pageRef = useRef<HTMLDivElement>(null);
 
   const [pinDetail, setPinDetail] = useState<PinDetailEntity | null>(null)
 
@@ -209,18 +215,18 @@ const PDFViewer: React.FC = () => {
               <ChevronRight size={18} />
             </button>
           </div>
-
-          <button
-            className={`fixed bottom-6 left-6 p-3 rounded-full shadow-lg z-10 ${isPinningMode ? 'bg-accent text-white' : 'bg-white text-gray-700'
-              }`}
-            onClick={() => { setIsPinningMode(!isPinningMode); setSelectedPin(null) }}
-            title={isPinningMode ? 'Cancel adding pin' : 'Add a new pin'}
-          >
-            <PinIcon size={20} />
-          </button>
         </div>
 
-        <AnnotationPanel width={sidebarWidth} setWidth={setSidebarWidth} />
+        <button
+          className={`fixed bottom-6 left-6 p-3 rounded-full shadow-lg z-10 ${isPinningMode ? 'bg-accent text-white' : 'bg-white text-gray-700'
+            }`}
+          onClick={() => { setIsPinningMode(!isPinningMode); setSelectedPin(null) }}
+          title={isPinningMode ? 'Cancel adding pin' : 'Add a new pin'}
+        >
+          <PinIcon size={20} />
+        </button>
+
+        <AnnotationPanel width={sidebarWidth} setWidth={setSidebarWidth} pageRef={pageRef} />
         <DialogModel key={nanoid()} isOpen={isOpen} onClose={handleClose} setPinDetail={setPinDetail} pinDetail={pinDetail} />
       </div>
     </>

@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { X, Trash2, ChevronLeft, ChevronRight, PinIcon } from 'lucide-react';
-import { usePDFContext } from '../contexts/PDFContext';
+import { usePDFContext, Pin } from '../contexts/PDFContext';
 import ColorPicker from './ColorPicker';
 import DialogModel from './DialogModel';
 import { nanoid } from 'nanoid';
+import { downloadKeyPointPDF } from '../utils/keyPointPdf';
+
 interface AnnotationPanelProps {
   width: number;
   setWidth: (width: number) => void;
+  pageRef: React.RefObject<HTMLDivElement>;
 }
 
-const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth }) => {
+const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth, pageRef }) => {
   const {
     pins, updatePin, deletePin, selectedPin, setSelectedPin,
     currentPage, totalPages
@@ -115,6 +118,18 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth }) =>
                       </div>
                       <button onClick={() => handleDelete(pin.id)}>
                         <Trash2 color="red" size={20} />
+                      </button>
+                      <button
+                        className="ml-2 p-1 rounded hover:bg-gray-200"
+                        onClick={async (e) => {
+                          e.stopPropagation(); // Prevent opening dialog when clicking download
+                          if (pageRef.current) {
+                            await downloadKeyPointPDF(pageRef.current, pin, `key-point-${pin.title}.pdf`);
+                          }
+                        }}
+                        title="Download Key Point PDF"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-down"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L15 2z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M12 18V12" /><path d="M9 15l3 3 3-3" /></svg>
                       </button>
                     </div>
                   </div>

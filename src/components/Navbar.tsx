@@ -4,14 +4,20 @@ import {
 } from 'lucide-react';
 import { usePDFContext } from '../contexts/PDFContext';
 import { downloadPDFWithPins } from '../utils/pdfUtils';
+import { downloadCombinedKeyPointsPDF } from '../utils/keyPointPdf';
 
 import Logo from "../../public/waltz-logo-black.jpg"
 
-const Navbar: React.FC = () => {
+interface NavbarProps {
+  pageRef: React.RefObject<HTMLDivElement>;
+}
+
+const Navbar: React.FC<NavbarProps> = ({ pageRef }) => {
   const { pdfUrl, setPDFFile, pins, addRecentFile, scale } = usePDFContext();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isCombinedExporting, setIsCombinedExporting] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -93,6 +99,33 @@ const Navbar: React.FC = () => {
                 )}
               </button>
             )}
+
+            {pdfUrl && (
+              <button
+                className="btn btn-secondary flex items-center"
+                onClick={async () => {
+                  if (pageRef.current && pins.length > 0) {
+                    setIsCombinedExporting(true);
+                    await downloadCombinedKeyPointsPDF(pageRef.current, pins);
+                    setIsCombinedExporting(false);
+                  }
+                }}
+                disabled={pins.length === 0 || isCombinedExporting}
+                title="Download Combined Key Points PDF"
+              >
+                {isCombinedExporting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+                    <span>Exporting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    <span>Export Combined Pins</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           <div className="md:hidden flex items-center">
@@ -135,6 +168,22 @@ const Navbar: React.FC = () => {
                 disabled={pins.length === 0 || isExporting}
               >
                 {isExporting ? 'Exporting...' : 'Export with Pins'}
+              </button>
+            )}
+
+            {pdfUrl && (
+              <button
+                className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-900 hover:bg-gray-100"
+                onClick={async () => {
+                  if (pageRef.current && pins.length > 0) {
+                    setIsCombinedExporting(true);
+                    await downloadCombinedKeyPointsPDF(pageRef.current, pins);
+                    setIsCombinedExporting(false);
+                  }
+                }}
+                disabled={pins.length === 0 || isCombinedExporting}
+              >
+                {isCombinedExporting ? 'Exporting...' : 'Export Combined Pins'}
               </button>
             )}
           </div>

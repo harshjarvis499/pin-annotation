@@ -64,7 +64,7 @@ function adjustCoordinatesForRotation(
         rotY -= adjustment; // pushing it downward
 
     } else {
-        let adjustmentPercentForY = 0.050 + ((-rotY - 150) / 3000); // Linearly increase
+        let adjustmentPercentForY = 0.052 + ((-rotY - 150) / 3000); // Linearly increase
         adjustmentPercentForY = Math.min(adjustmentPercentForY, 0.1); // Cap at 10%
         const adjustment = height * adjustmentPercentForY;
         console.log(`Adjusting Y down (from top) by ${adjustmentPercentForY * 100}% (${adjustment}px)`);
@@ -94,9 +94,15 @@ function adjustCoordinatesForRotation(
         console.log(`Adjusting X right by ${adjustmentPercent * 100}% (${adjustment}px)`);
         rotX += adjustment; // pushing it to the right
     }
-    else if ((rotX < -100 || rotX > -100) && rotX > -150) {
+    else if ((rotX < -100 || rotX > -100) && rotX > -150 && rotX < -1) {
         let adjustmentPercent = 0.04 + ((-rotX - 100) / 3000); // increase with how far left
         adjustmentPercent = Math.min(adjustmentPercent, 0.1); // Cap at 10%
+        const adjustment = width * adjustmentPercent;
+        console.log(`Adjusting X right by ${adjustmentPercent * 100}% (${adjustment}px)`);
+        rotX += adjustment; // pushing it to the right
+    } else {
+        let adjustmentPercent = 0.029 + ((-rotX - 100) / 3000); // increase with how far left
+        adjustmentPercent = Math.min(adjustmentPercent, 0.029); // Cap at 10%
         const adjustment = width * adjustmentPercent;
         console.log(`Adjusting X right by ${adjustmentPercent * 100}% (${adjustment}px)`);
         rotX += adjustment; // pushing it to the right
