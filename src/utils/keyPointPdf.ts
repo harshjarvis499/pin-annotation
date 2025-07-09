@@ -37,6 +37,12 @@ export async function downloadKeyPointPDF(
             cropY = pageHeight - captureHeight;
         }
 
+        // Temporarily hide all pin titles
+        const pinTitles = element.querySelectorAll('.pin span');
+        pinTitles.forEach(title => {
+            (title as HTMLElement).style.display = 'none';
+        });
+
         // Capture the element as an image, focusing on the area around the pin
         const canvas = await html2canvas(element, {
             x: cropX,
@@ -45,6 +51,11 @@ export async function downloadKeyPointPDF(
             height: captureHeight,
             scale: 4, // Increased scale for better quality
             useCORS: true // Enable CORS for images loaded from other origins
+        });
+
+        // Restore pin titles visibility
+        pinTitles.forEach(title => {
+            (title as HTMLElement).style.display = '';
         });
 
         const imgData = canvas.toDataURL('image/png');
