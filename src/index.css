@@ -31,12 +31,21 @@
   }
 
   .pin {
-    @apply absolute cursor-pointer transition-all duration-300;
+    @apply absolute cursor-pointer;
     pointer-events: all;
+    will-change: transform, left, top;
+    backface-visibility: hidden;
   }
 
   .pin-marker {
     @apply rounded-full bg-accent/90 border-2 border-white shadow-md flex items-center justify-center text-white font-bold text-xs;
+  }
+
+  .pin-dragging {
+    @apply shadow-lg;
+    opacity: 0.85;
+    z-index: 9999 !important;
+    touch-action: none;
   }
 }
 
@@ -47,6 +56,7 @@
 .pin-tooltip {
   @apply absolute z-50 bg-white rounded-lg shadow-lg p-3 text-sm border border-gray-200;
   pointer-events: none;
+  will-change: transform;
 }
 
 .annotator-sidebar {
@@ -79,5 +89,5 @@
 }
 
 .pin-new {
-  animation: pinPulse 1s ease-in-out;
+  animation: pinPulse 0.5s ease-out;
 }
