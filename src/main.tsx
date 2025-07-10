@@ -7,7 +7,6 @@ import { PrimeReactProvider } from 'primereact/api';
 import "primereact/resources/themes/lara-light-cyan/theme.css";
 
 createRoot(document.getElementById('root')!).render(
-
   <StrictMode>
     <PrimeReactProvider>
       <PDFProvider>

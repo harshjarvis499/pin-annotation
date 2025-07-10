@@ -14,7 +14,8 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^3.11.174",
     "primereact": "^10.9.6",
-    "react-pdf": "^7.5.1"
+    "react-pdf": "^7.5.1",
+    "react-router-dom": "^7.6.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.15",
