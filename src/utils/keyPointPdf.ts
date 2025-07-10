@@ -111,6 +111,12 @@ export async function downloadCombinedKeyPointsPDF(
     try {
         const pdfDoc = await PDFDocument.create();
 
+        // Temporarily hide all pin titles
+        const pinTitles = element.querySelectorAll('.pin span');
+        pinTitles.forEach(title => {
+            (title as HTMLElement).style.display = 'none';
+        });
+
         for (const pin of pins) {
             // Get the actual dimensions of the element (PDF page)
             const rect = element.getBoundingClientRect();
@@ -153,6 +159,7 @@ export async function downloadCombinedKeyPointsPDF(
             const imgData = canvas.toDataURL('image/png');
             const pngImage = await pdfDoc.embedPng(imgData);
 
+            // Add a new page for each pin
             const page = pdfDoc.addPage();
             const { width, height } = page.getSize();
 
@@ -164,6 +171,7 @@ export async function downloadCombinedKeyPointsPDF(
             const scaledWidth = imgWidth * ratio;
             const scaledHeight = imgHeight * ratio;
 
+            // Draw the image
             page.drawImage(pngImage, {
                 x: (width - scaledWidth) / 2,
                 y: (height - scaledHeight) / 2,
@@ -181,13 +189,18 @@ export async function downloadCombinedKeyPointsPDF(
             });
         }
 
-        // Save the PDF
+        // Restore pin titles visibility
+        pinTitles.forEach(title => {
+            (title as HTMLElement).style.display = '';
+        });
+
+        // Save the combined PDF
         const pdfBytes = await pdfDoc.save();
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
         saveAs(blob, filename);
 
     } catch (error) {
-        console.error('Error generating combined key point PDF:', error);
+        console.error('Error generating combined key points PDF:', error);
         throw error;
     }
 } 
