@@ -3,7 +3,7 @@ import {
   Upload, Download, Pin, Settings, Menu, X
 } from 'lucide-react';
 import { usePDFContext } from '../contexts/PDFContext';
-import { downloadPDFWithPins } from '../utils/pdfUtils';
+import { downloadPDFWithPins, downloadPDFWithHighlights } from '../utils/pdfUtils';
 import { downloadCombinedKeyPointsPDF } from '../utils/keyPointPdf';
 
 import Logo from "../../public/waltz-logo-black.jpg"
@@ -13,11 +13,12 @@ interface NavbarProps {
 }
 
 const Navbar: React.FC<NavbarProps> = ({ pageRef }) => {
-  const { pdfUrl, setPDFFile, pins, addRecentFile, scale } = usePDFContext();
+  const { pdfUrl, setPDFFile, pins, highlights, addRecentFile, scale } = usePDFContext();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isCombinedExporting, setIsCombinedExporting] = useState(false);
+  const [isHighlightExporting, setIsHighlightExporting] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Document, Page } from 'react-pdf';
-import { Pin as PinIcon, Plus, Minus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pin as PinIcon, Plus, Minus, ChevronLeft, ChevronRight, Highlighter, Download as DownloadIcon, Pencil, Eraser } from 'lucide-react';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import '../lib/pdfjs-init';
 import { usePDFContext } from '../contexts/PDFContext';
 import PinMarker from './PinMarker';
+import HighlightMarker from './HighlightMarker';
+import FreehandCanvas from './FreehandCanvas';
 import AnnotationPanel from './AnnotationPanel';
 import DialogModel from './DialogModel';
 import { nanoid } from 'nanoid';
 import { downloadKeyPointPDF, downloadCombinedKeyPointsPDF } from '../utils/keyPointPdf';
-import { downloadPDFWithPins } from '../utils/pdfUtils';
+import { downloadPDFWithPins, downloadPDFWithAnnotations } from '../utils/pdfUtils';
 
 export interface PinDetailEntity {
   pageNumber: number;
@@ -23,23 +25,42 @@ interface PDFViewerProps {
 
 const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
   const {
-    pdfUrl, pins, addPin, currentPage, setCurrentPage,
-    totalPages, setTotalPages, scale, setScale, setSelectedPin
+    pdfUrl, pins, addPin, highlights, addHighlight, currentPage, setCurrentPage,
+    totalPages, setTotalPages, scale, setScale, setSelectedPin, setSelectedHighlight,
+    undoLastStroke, strokes
   } = usePDFContext();
   const [pdfDimensions, setPdfDimensions] = useState({ width: 0, height: 0 });
-  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const sidebarWidth = 320;
   const [isPinningMode, setIsPinningMode] = useState(false);
+  const [isHighlightExporting, setIsHighlightExporting] = useState(false);
+  const [isMarkerMode, setIsMarkerMode] = useState(false);
+  const [isEraserMode, setIsEraserMode] = useState(false);
+  const [isHighlightingMode, setIsHighlightingMode] = useState(false);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
+  const [selectionRect, setSelectionRect] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<Error | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [pinDetail, setPinDetail] = useState<PinDetailEntity | null>(null)
 
-
   // dialog state
   const [isOpen, setIsOpen] = useState(false);
 
   const handleClose = () => setIsOpen(false);
+
+  const handleDownloadHighlightPdf = async () => {
+    if (!pdfUrl || highlights.length === 0) return;
+    try {
+      setIsHighlightExporting(true);
+      await downloadPDFWithAnnotations(pdfUrl, highlights, strokes, scale);
+    } catch (err) {
+      console.error('Failed to download PDF with highlights', err);
+    } finally {
+      setIsHighlightExporting(false);
+    }
+  };
 
   // Memoize the options object
   const pdfOptions = useMemo(() => ({
@@ -76,15 +97,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
 
     // Ensure the click is within the page bounds
     if (xPercent >= 0 && xPercent <= 100 && yPercent >= 0 && yPercent <= 100) {
-      // addPin({
-      //   pageNumber: currentPage,
-      //   x: xPercent,
-      //   y: yPercent,
-      //   color: '#FF3B30',
-      //   title: 'New Pin',
-      //   description: 'Add your notes here'
-      // });
-
       setPinDetail({
         pageNumber: currentPage,
         x: xPercent,
@@ -94,6 +106,80 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
       setIsOpen(true)
       setIsPinningMode(false);
     }
+  };
+
+  const handleHighlightMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isHighlightingMode || !pageRef.current) return;
+
+    const page = pageRef.current;
+    const rect = page.getBoundingClientRect();
+
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    const xPercent = (offsetX / rect.width) * 100;
+    const yPercent = (offsetY / rect.height) * 100;
+
+    if (xPercent >= 0 && xPercent <= 100 && yPercent >= 0 && yPercent <= 100) {
+      setSelectionStart({ x: xPercent, y: yPercent });
+      setIsSelecting(true);
+      setSelectedHighlight(null);
+    }
+  };
+
+  const handleHighlightMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isSelecting || !selectionStart || !pageRef.current) return;
+
+    const page = pageRef.current;
+    const rect = page.getBoundingClientRect();
+
+    const currentX = ((e.clientX - rect.left) / rect.width) * 100;
+    const currentY = ((e.clientY - rect.top) / rect.height) * 100;
+
+    const startX = Math.min(selectionStart.x, currentX);
+    const startY = Math.min(selectionStart.y, currentY);
+    const width = Math.abs(currentX - selectionStart.x);
+    const height = Math.abs(currentY - selectionStart.y);
+
+    setSelectionRect({ x: startX, y: startY, width, height });
+  };
+
+  const handleHighlightMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isSelecting || !selectionStart || !pageRef.current) return;
+
+    const page = pageRef.current;
+    const rect = page.getBoundingClientRect();
+
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    const xPercent = (offsetX / rect.width) * 100;
+    const yPercent = (offsetY / rect.height) * 100;
+
+    if (xPercent >= 0 && xPercent <= 100 && yPercent >= 0 && yPercent <= 100) {
+      const startX = Math.min(selectionStart.x, xPercent);
+      const startY = Math.min(selectionStart.y, yPercent);
+      const width = Math.abs(xPercent - selectionStart.x);
+      const height = Math.abs(yPercent - selectionStart.y);
+
+      // Only create highlight if selection is large enough
+      if (width > 1 && height > 0.5) {
+        addHighlight({
+          pageNumber: currentPage,
+          x: startX,
+          y: startY,
+          width: width,
+          height: height,
+          color: '#ffeb3b', // Yellow highlight
+          note: 'New highlight'
+        });
+      }
+    }
+
+    setIsSelecting(false);
+    setSelectionStart(null);
+    setSelectionRect(null);
+    setIsHighlightingMode(false);
   };
 
   const zoomIn = () => {
@@ -147,8 +233,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
                 <div
                   ref={pageRef}
                   className="pdf-page relative"
-                  style={{ cursor: isPinningMode ? 'crosshair' : 'auto' }}
+                  style={{ cursor: isPinningMode || isHighlightingMode || isMarkerMode ? 'crosshair' : 'auto' }}
                   onClick={handlePageClick}
+                  onMouseDown={handleHighlightMouseDown}
+                  onMouseMove={handleHighlightMouseMove}
+                  onMouseUp={handleHighlightMouseUp}
                 >
                   <Page
                     pageNumber={currentPage}
@@ -165,6 +254,35 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
                     renderTextLayer={false}
                     renderAnnotationLayer={false}
                   />
+
+                  {/* Freehand drawing overlay */}
+                  <FreehandCanvas pageRef={pageRef} pageNumber={currentPage} drawActive={isMarkerMode} eraseActive={isEraserMode} />
+
+                  {isSelecting && selectionRect && (
+                    <div
+                      className="selection-rectangle"
+                      style={{
+                        position: 'absolute',
+                        left: `${selectionRect.x}%`,
+                        top: `${selectionRect.y}%`,
+                        width: `${selectionRect.width}%`,
+                        height: `${selectionRect.height}%`,
+                        backgroundColor: 'rgba(59, 130, 246, 0.3)',
+                        border: '1px solid #3b82f6',
+                        zIndex: 10
+                      }}
+                    />
+                  )}
+
+                  {!isLoading && highlights
+                    .filter(h => h.pageNumber === currentPage)
+                    .map(h => (
+                      <HighlightMarker
+                        key={h.id}
+                        highlight={h}
+                        pdfDimensions={pdfDimensions}
+                      />
+                    ))}
 
                   {!isLoading && pins
                     .filter(pin => pin.pageNumber === currentPage)
@@ -217,16 +335,61 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
           </div>
         </div>
 
-        <button
-          className={`fixed bottom-6 left-6 p-3 rounded-full shadow-lg z-10 ${isPinningMode ? 'bg-accent text-white' : 'bg-white text-gray-700'
-            }`}
-          onClick={() => { setIsPinningMode(!isPinningMode); setSelectedPin(null) }}
-          title={isPinningMode ? 'Cancel adding pin' : 'Add a new pin'}
-        >
-          <PinIcon size={20} />
-        </button>
+        <div className="fixed bottom-6 left-6 flex flex-col gap-2 z-10">
+          <button
+            className={`p-3 rounded-full shadow-lg ${isHighlightingMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
+            onClick={() => { setIsHighlightingMode(!isHighlightingMode); setIsPinningMode(false); setIsMarkerMode(false); setSelectedHighlight(null); setSelectedPin(null); }}
+            title={isHighlightingMode ? 'Cancel highlighting' : 'Add a highlight'}
+          >
+            <Highlighter size={20} />
+          </button>
+          <button
+            className={`p-3 rounded-full shadow-lg ${isPinningMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
+            onClick={() => { setIsPinningMode(!isPinningMode); setIsHighlightingMode(false); setIsMarkerMode(false); setSelectedPin(null); setSelectedHighlight(null); }}
+            title={isPinningMode ? 'Cancel adding pin' : 'Add a new pin'}
+          >
+            <PinIcon size={20} />
+          </button>
+          <button
+            className={`p-3 rounded-full shadow-lg ${isMarkerMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
+            onClick={() => {
+              setIsMarkerMode(!isMarkerMode);
+              setIsPinningMode(false);
+              setIsHighlightingMode(false);
+              setSelectedPin(null);
+              setSelectedHighlight(null);
+            }}
+            title={isMarkerMode ? 'Cancel marker' : 'Freehand marker'}
+          >
+            <Pencil size={20} />
+          </button>
+          <button
+            className={`p-3 rounded-full shadow-lg ${isEraserMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
+            onClick={() => {
+              setIsEraserMode(!isEraserMode);
+              setIsMarkerMode(false);
+              setIsPinningMode(false);
+              setIsHighlightingMode(false);
+            }}
+            title={isEraserMode ? 'Cancel eraser' : 'Eraser mode'}
+          >
+            <Eraser size={20} />
+          </button>
+          <button
+            className={`p-3 rounded-full shadow-lg ${isHighlightExporting ? 'bg-gray-200 text-gray-500' : 'bg-white text-gray-700'}`}
+            onClick={handleDownloadHighlightPdf}
+            disabled={(highlights.length === 0 && strokes.length === 0) || !pdfUrl || isHighlightExporting}
+            title="Download PDF with Highlights & Strokes"
+          >
+            {isHighlightExporting ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+            ) : (
+              <DownloadIcon size={20} />
+            )}
+          </button>
+        </div>
 
-        <AnnotationPanel width={sidebarWidth} setWidth={setSidebarWidth} pageRef={pageRef} />
+        <AnnotationPanel width={sidebarWidth} pageRef={pageRef} />
         <DialogModel key={nanoid()} isOpen={isOpen} onClose={handleClose} setPinDetail={setPinDetail} pinDetail={pinDetail} />
       </div>
     </>

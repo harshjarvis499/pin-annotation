@@ -1,20 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { X, Trash2, ChevronLeft, ChevronRight, PinIcon } from 'lucide-react';
-import { usePDFContext, Pin } from '../contexts/PDFContext';
-import ColorPicker from './ColorPicker';
+import { Trash2, ChevronLeft, ChevronRight, PinIcon } from 'lucide-react';
+import { usePDFContext } from '../contexts/PDFContext';
 import DialogModel from './DialogModel';
-import { nanoid } from 'nanoid';
 import { downloadKeyPointPDF } from '../utils/keyPointPdf';
 
 interface AnnotationPanelProps {
   width: number;
-  setWidth: (width: number) => void;
   pageRef: React.RefObject<HTMLDivElement>;
 }
 
-const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth, pageRef }) => {
+const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => {
   const {
     pins, updatePin, deletePin, selectedPin, setSelectedPin,
+    highlights, selectedHighlight, setSelectedHighlight, deleteHighlight,
     currentPage, totalPages
   } = usePDFContext();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -24,12 +22,11 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth, page
 
   const selectedPinData = pins.find(pin => pin.id === selectedPin);
   const pagePins = pins.filter(pin => pin.pageNumber === currentPage);
-
+  const pageHighlights = highlights.filter(h => h.pageNumber === currentPage);
 
   const [isDialog, setIsDialog] = useState(false);
 
-  const handleClose = () => setIsDialog(false)
-
+  const handleClose = () => setIsDialog(false);
 
   useEffect(() => {
     if (selectedPinData) {
@@ -53,15 +50,15 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth, page
     }
   };
 
-  const handleDelete = (id: string) => {
-    // if (selectedPin && confirm('Are you sure you want to delete this pin?')) {
-
+  const handleDeletePin = (id: string) => {
     deletePin(id);
-    // }
+  };
+
+  const handleDeleteHighlight = (id: string) => {
+    deleteHighlight(id);
   };
 
   useEffect(() => {
-    // Auto-save when changing fields
     if (selectedPin) {
       const timeoutId = setTimeout(() => {
         handleSave();
@@ -81,7 +78,7 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth, page
     >
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <h2 className={`font-medium ${isCollapsed ? 'hidden' : 'block'}`}>
-          {selectedPin ? 'Edit Annotation' : 'Annotations'}
+          Annotations
         </h2>
         <div className="flex items-center">
           <button
@@ -97,32 +94,35 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth, page
         <>
 
           <div className="flex-1 overflow-auto">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="font-medium">Pins</h3>
+            </div>
             {pagePins.length === 0 ? (
               <div className="p-6 text-center text-gray-500">
                 <p>No pins on this page</p>
-                <p className="text-sm mt-1">Click the pin button to add annotations</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-200">
                 {pagePins.map(pin => (
                   <div
                     key={pin.id}
-                    className="p-4 hover:bg-gray-50 cursor-pointer"
+                    className={`p-4 hover:bg-gray-50 cursor-pointer ${selectedPin === pin.id ? 'bg-blue-100' : ''}`}
+                    onClick={() => setSelectedPin(pin.id)}
                   >
                     <div className="flex items-center ">
-                      <div className='flex items-center gap-2 flex-grow' onClick={() => { setSelectedPin(pin.id); setIsDialog(true) }}>
+                      <div className='flex items-center gap-2 flex-grow' onClick={(e) => { e.stopPropagation(); setSelectedPin(pin.id); setIsDialog(true); }}>
                         <div className='flex items-end'>
                           <PinIcon size={20} color={pin.color} className='-rotate-45 ' />
                         </div>
                         <div className="font-medium flex-grow ">{pin.title}</div>
                       </div>
-                      <button onClick={() => handleDelete(pin.id)}>
+                      <button onClick={(e) => { e.stopPropagation(); handleDeletePin(pin.id); }}>
                         <Trash2 color="red" size={20} />
                       </button>
                       <button
                         className="ml-2 p-1 rounded hover:bg-gray-200"
                         onClick={async (e) => {
-                          e.stopPropagation(); // Prevent opening dialog when clicking download
+                          e.stopPropagation();
                           if (pageRef.current) {
                             await downloadKeyPointPDF(pageRef.current, pin, `key-point-${pin.title}.pdf`);
                           }
@@ -138,22 +138,54 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, setWidth, page
             )}
           </div>
 
-          {totalPages > 0 && (
-            <div className="border-t border-gray-200 p-4">
-              <p className="text-sm text-gray-500">
-                Page {currentPage} of {totalPages}
-              </p>
-              <p className="text-sm text-gray-500">
-                {pagePins.length} pin{pagePins.length !== 1 ? 's' : ''} on this page
-              </p>
-              <p className="text-sm text-gray-500">
-                {pins.length} pin{pins.length !== 1 ? 's' : ''} total
-              </p>
+          <div className="p-4 border-y border-gray-200 mt-4">
+            <h3 className="font-medium">Highlights</h3>
+          </div>
+          {pageHighlights.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">
+              <p>No highlights on this page</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {pageHighlights.map(h => (
+                <div
+                  key={h.id}
+                  className={`p-4 hover:bg-gray-50 cursor-pointer ${selectedHighlight === h.id ? 'bg-blue-100' : ''}`}
+                  onClick={() => setSelectedHighlight(h.id)}
+                >
+                  <div className="flex items-center">
+                    <div style={{ width: 16, height: 16, backgroundColor: h.color, marginRight: 8, flexShrink: 0 }} />
+                    <div className="font-medium flex-grow truncate">{h.note || 'Highlight'}</div>
+                    <button onClick={(e) => { e.stopPropagation(); handleDeleteHighlight(h.id); }}>
+                      <Trash2 color="red" size={20} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </>
       )}
 
+      {totalPages > 0 && (
+        <div className="border-t border-gray-200 p-4">
+          <p className="text-sm text-gray-500">
+            Page {currentPage} of {totalPages}
+          </p>
+          <p className="text-sm text-gray-500">
+            {pagePins.length} pin{pagePins.length !== 1 ? 's' : ''} on this page
+          </p>
+          <p className="text-sm text-gray-500">
+            {pageHighlights.length} highlight{pageHighlights.length !== 1 ? 's' : ''} on this page
+          </p>
+          <p className="text-sm text-gray-500">
+            {pins.length} pin{pins.length !== 1 ? 's' : ''} total
+          </p>
+          <p className="text-sm text-gray-500">
+            {highlights.length} highlight{highlights.length !== 1 ? 's' : ''} total
+          </p>
+        </div>
+      )}
       <DialogModel isOpen={isDialog} onClose={handleClose} pinDetail={null} setPinDetail={null} />
     </div>
   );

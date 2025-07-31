@@ -12,6 +12,27 @@ export interface Pin {
   createdAt: Date;
 }
 
+export interface Stroke {
+  id: string;
+  pageNumber: number;
+  points: { x: number; y: number }[]; // percentage coordinates
+  color: string;
+  width: number; // px at scale 1
+  createdAt: Date;
+}
+
+export interface Highlight {
+  id: string;
+  pageNumber: number;
+  x: number; // percentage position on the page
+  y: number; // percentage position on the page
+  width: number; // percentage width
+  height: number; // percentage height
+  color: string;
+  note?: string;
+  createdAt: Date;
+}
+
 interface PDFContextType {
   pdfUrl: string | null;
   setPDFFile: (file: File | null) => void;
@@ -19,6 +40,14 @@ interface PDFContextType {
   addPin: (pin: Omit<Pin, 'id' | 'createdAt'>) => void;
   updatePin: (id: string, updates: Partial<Omit<Pin, 'id' | 'createdAt'>>) => void;
   deletePin: (id: string) => void;
+  highlights: Highlight[];
+  strokes: Stroke[];
+  addHighlight: (highlight: Omit<Highlight, 'id' | 'createdAt'>) => void;
+  addStroke: (stroke: Omit<Stroke, 'id' | 'createdAt'>) => void;
+  undoLastStroke: (pageNumber: number) => void;
+  updateHighlight: (id: string, updates: Partial<Omit<Highlight, 'id' | 'createdAt'>>) => void;
+  deleteHighlight: (id: string) => void;
+  deleteStroke: (id: string) => void;
   currentPage: number;
   setCurrentPage: (page: number) => void;
   totalPages: number;
@@ -27,6 +56,8 @@ interface PDFContextType {
   setScale: (scale: number) => void;
   selectedPin: string | null;
   setSelectedPin: (id: string | null) => void;
+  selectedHighlight: string | null;
+  setSelectedHighlight: (id: string | null) => void;
   recentFiles: { name: string, lastModified: Date }[];
   addRecentFile: (file: File) => void;
 }
@@ -36,10 +67,13 @@ const PDFContext = createContext<PDFContextType | undefined>(undefined);
 export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [pdfUrl, setPdfUrl] = useState<string | null>(""); // testUrl = "https://jb-glass-webapp2.s3.ap-south-1.amazonaws.com/website/glass-catalogue-pdf/6636126df7231385747e3e81/TINTED-1748892672539.pdf"
   const [pins, setPins] = useState<Pin[]>([]);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [scale, setScale] = useState<number>(1);
   const [selectedPin, setSelectedPin] = useState<string | null>(null);
+  const [selectedHighlight, setSelectedHighlight] = useState<string | null>(null);
   const [recentFiles, setRecentFiles] = useState<{ name: string, lastModified: Date }[]>([]);
 
   // Clean up object URL when component unmounts or when URL changes
@@ -88,6 +122,53 @@ export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const addHighlight = (highlightData: Omit<Highlight, 'id' | 'createdAt'>) => {
+    const newHighlight: Highlight = {
+      ...highlightData,
+      id: nanoid(),
+      createdAt: new Date(),
+    };
+    setHighlights(prev => [...prev, newHighlight]);
+  };
+
+  const updateHighlight = (id: string, updates: Partial<Omit<Highlight, 'id' | 'createdAt'>>) => {
+    setHighlights(prev => prev.map(highlight =>
+      highlight.id === id ? { ...highlight, ...updates } : highlight
+    ));
+  };
+
+  const deleteHighlight = (id: string) => {
+    setHighlights(prev => prev.filter(highlight => highlight.id !== id));
+    if (selectedHighlight === id) {
+      setSelectedHighlight(null);
+    }
+  };
+
+  // ---- Stroke helpers ----
+  const addStroke = (strokeData: Omit<Stroke, 'id' | 'createdAt'>) => {
+    const newStroke: Stroke = {
+      ...strokeData,
+      id: nanoid(),
+      createdAt: new Date(),
+    };
+    setStrokes(prev => [...prev, newStroke]);
+  };
+
+  const undoLastStroke = (pageNumber: number) => {
+    setStrokes(prev => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].pageNumber === pageNumber) {
+          return [...prev.slice(0, i), ...prev.slice(i + 1)];
+        }
+      }
+      return prev;
+    });
+  };
+
+  const deleteStroke = (id: string) => {
+    setStrokes(prev => prev.filter(s => s.id !== id));
+  };
+
   const addRecentFile = (file: File) => {
     const newRecent = {
       name: file.name,
@@ -111,6 +192,14 @@ export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addPin,
         updatePin,
         deletePin,
+        highlights,
+        addHighlight,
+        updateHighlight,
+        deleteHighlight,
+        strokes,
+        addStroke,
+        undoLastStroke,
+        deleteStroke,
         currentPage,
         setCurrentPage,
         totalPages,
@@ -119,6 +208,8 @@ export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setScale,
         selectedPin,
         setSelectedPin,
+        selectedHighlight,
+        setSelectedHighlight,
         recentFiles,
         addRecentFile
       }}
