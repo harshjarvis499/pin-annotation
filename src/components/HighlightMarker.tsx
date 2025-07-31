@@ -35,12 +35,12 @@ const HighlightMarker: React.FC<HighlightMarkerProps> = ({ highlight, pdfDimensi
     if (selectedHighlight !== highlight.id) return;
 
     e.stopPropagation();
-    
+
     const startX = e.clientX;
     const startY = e.clientY;
     const startLeft = highlight.x;
     const startTop = highlight.y;
-    
+
     setIsDragging(true);
     setShowTooltip(false);
 
@@ -73,10 +73,10 @@ const HighlightMarker: React.FC<HighlightMarkerProps> = ({ highlight, pdfDimensi
 
   const handleResizeMouseDown = (e: React.MouseEvent, direction: string) => {
     if (selectedHighlight !== highlight.id) return;
-    
+
     e.stopPropagation();
     setIsResizing(true);
-    
+
     const startX = e.clientX;
     const startY = e.clientY;
     const startWidth = highlight.width;
@@ -113,11 +113,11 @@ const HighlightMarker: React.FC<HighlightMarkerProps> = ({ highlight, pdfDimensi
         newY = Math.max(0, startTop - heightChange);
       }
 
-      updateHighlight(highlight.id, { 
-        x: newX, 
-        y: newY, 
-        width: newWidth, 
-        height: newHeight 
+      updateHighlight(highlight.id, {
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight
       });
     };
 
@@ -163,7 +163,7 @@ const HighlightMarker: React.FC<HighlightMarkerProps> = ({ highlight, pdfDimensi
             className="absolute -bottom-1 -right-1 w-2 h-2 bg-blue-500 border border-white cursor-se-resize"
             onMouseDown={(e) => handleResizeMouseDown(e, 'bottom-right')}
           />
-          
+
           {/* Edge handles */}
           <div
             className="absolute -top-1 left-1/2 w-2 h-2 bg-blue-500 border border-white cursor-n-resize transform -translate-x-1/2"

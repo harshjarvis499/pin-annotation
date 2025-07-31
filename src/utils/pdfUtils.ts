@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, degrees, LineCapStyle } from 'pdf-lib';
+import { PDFDocument, rgb, degrees, LineCapStyle, PDFName, PDFArray, PDFString, AnnotationFlags, PDFNumber } from 'pdf-lib';
 import { saveAs } from 'file-saver';
 import { Pin, Highlight, Stroke } from '../contexts/PDFContext';
 
@@ -10,112 +10,6 @@ const PIN_WIDTH = 24;  // Width of the SVG viewbox
 const PIN_HEIGHT = 24; // Height of the SVG viewbox
 
 
-function adjustCoordinatesForRotation(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    rotation: number
-): { x: number, y: number } {
-    // Convert degrees to radians
-    const rad = (rotation * Math.PI) / 180;
-
-    console.log("rad", rad);
-
-    // Calculate the center of the page
-    const centerX = width / 2;
-    const centerY = height / 2;
-
-    // Translate point to origin
-    const transX = x - centerX;
-    const transY = y - centerY;
-
-    console.log("height", height);
-
-    // Rotate point
-    let rotX = transX * Math.cos(rad) - transY * Math.sin(rad);
-    let rotY = transX * Math.sin(rad) + transY * Math.cos(rad);
-
-    console.log("rotY", rotY);
-    console.log("rotX", rotX);
-
-    // Adjust Y if rotY is too far down
-    // if (rotY > 150) {
-    //     let adjustmentPercent = 0.054 + ((rotY - 150) / 3000); // Linearly increase
-    //     adjustmentPercent = Math.min(adjustmentPercent, 0.09); // Cap at 10%
-    //     const adjustment = height * adjustmentPercent;
-    //     console.log(`Adjusting Y down by ${adjustmentPercent * 100}% (${adjustment}px)`);
-    //     rotY += adjustment;
-    // }
-    // // Adjust Y if rotY is too far up (negative)
-    // else if (rotY < -10) {
-    //     let adjustmentPercent = 0.054 + ((-rotY - 150) / 3000); // Linearly increase
-    //     adjustmentPercent = Math.min(adjustmentPercent, 0.1); // Cap at 10%
-    //     const adjustment = height * adjustmentPercent;
-    //     console.log(`Adjusting Y down (from top) by ${adjustmentPercent * 100}% (${adjustment}px)`);
-    //     rotY -= adjustment; // pushing it downward
-    // }
-
-    if (rotY < -100) {
-        let adjustmentPercentForY = 0.055 + ((-rotY - 150) / 3000); // Linearly increase
-        adjustmentPercentForY = Math.min(adjustmentPercentForY, 0.1); // Cap at 10%
-        const adjustment = height * adjustmentPercentForY;
-        console.log(`Adjusting Y down (from top) by ${adjustmentPercentForY * 100}% (${adjustment}px)`);
-        rotY -= adjustment; // pushing it downward
-
-    } else {
-        let adjustmentPercentForY = 0.052 + ((-rotY - 150) / 3000); // Linearly increase
-        adjustmentPercentForY = Math.min(adjustmentPercentForY, 0.1); // Cap at 10%
-        const adjustment = height * adjustmentPercentForY;
-        console.log(`Adjusting Y down (from top) by ${adjustmentPercentForY * 100}% (${adjustment}px)`);
-        rotY -= adjustment; // pushing it downward
-    }
-
-    // Adjust X if rotX is too far left
-    if (rotX < -300 && rotX < -250) {
-        let adjustmentPercent = (rotX < -350 ? 0.08 : 0.07) + ((-rotX - 100) / 3000); // increase with how far left
-        adjustmentPercent = Math.min(adjustmentPercent, (rotX < -350 ? 0.122 : 0.114)); // Cap at 10%
-        const adjustment = width * adjustmentPercent;
-        console.log(`Adjusting X right by test ${adjustmentPercent * 100}% (${adjustment}px)`);
-        rotX += adjustment; // pushing it to the right
-    }
-    else if (rotX < -250 && rotX < -200) {
-        let adjustmentPercent = 0.1 + ((-rotX - 100) / 3000); // increase with how far left
-        adjustmentPercent = Math.min(adjustmentPercent, 0.118); // Cap at 10%
-        const adjustment = width * adjustmentPercent;
-        console.log(`Adjusting X right by test ${adjustmentPercent * 100}% (${adjustment}px)`);
-        rotX += adjustment; // pushing it to the right
-    }
-    else if (rotX < -150 && rotX < -100) {
-
-        let adjustmentPercent = 0.05 + ((-rotX - 100) / 3000); // increase with how far left
-        adjustmentPercent = Math.min(adjustmentPercent, 0.1); // Cap at 10%
-        const adjustment = width * adjustmentPercent;
-        console.log(`Adjusting X right by ${adjustmentPercent * 100}% (${adjustment}px)`);
-        rotX += adjustment; // pushing it to the right
-    }
-    else if ((rotX < -100 || rotX > -100) && rotX > -150 && rotX < -1) {
-        let adjustmentPercent = 0.04 + ((-rotX - 100) / 3000); // increase with how far left
-        adjustmentPercent = Math.min(adjustmentPercent, 0.1); // Cap at 10%
-        const adjustment = width * adjustmentPercent;
-        console.log(`Adjusting X right by ${adjustmentPercent * 100}% (${adjustment}px)`);
-        rotX += adjustment; // pushing it to the right
-    } else {
-        let adjustmentPercent = 0.029 + ((-rotX - 100) / 3000); // increase with how far left
-        adjustmentPercent = Math.min(adjustmentPercent, 0.029); // Cap at 10%
-        const adjustment = width * adjustmentPercent;
-        console.log(`Adjusting X right by ${adjustmentPercent * 100}% (${adjustment}px)`);
-        rotX += adjustment; // pushing it to the right
-    }
-
-
-
-    // Translate back
-    return {
-        x: rotX + centerX,
-        y: rotY + centerY
-    };
-}
 
 
 
@@ -263,7 +157,6 @@ export async function downloadPDFWithAnnotations(
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const pages = pdfDoc.getPages();
 
-        // ---- Highlights ----
         const highlightsByPage = highlights.reduce<Record<number, Highlight[]>>((acc, h) => {
             const pageNum = h.pageNumber - 1;
             (acc[pageNum] ||= []).push(h);
@@ -273,17 +166,21 @@ export async function downloadPDFWithAnnotations(
         for (const [pageNumStr, pageHighlights] of Object.entries(highlightsByPage)) {
             const page = pages[parseInt(pageNumStr)];
             if (!page) continue;
+
             const { width: pageWidth, height: pageHeight } = page.getSize();
             const rotation = page.getRotation().angle;
+
+            if (!page.node.has(PDFName.of('Annots'))) {
+                page.node.set(PDFName.of('Annots'), pdfDoc.context.obj([]));
+            }
+
+            const annots = page.node.lookup(PDFName.of('Annots'), PDFArray);
+
 
             pageHighlights.forEach(h => {
                 const fillColor = rgb(68 / 255, 64 / 255, 59 / 255);
                 const opacity = 0.5;
 
-                // Use original, un-rotated page dimensions for all calculations.
-
-                // Calculate the absolute rectangle based on the original, un-rotated orientation.
-                // If rotated, the width/height given by the user correspond to the swapped dimensions.
                 const unrotatedW = (rotation === 90 || rotation === 270) ? pageHeight : pageWidth;
                 const unrotatedH = (rotation === 90 || rotation === 270) ? pageWidth : pageHeight;
 
@@ -299,24 +196,78 @@ export async function downloadPDFWithAnnotations(
                         finalRect = { x: absY, y: unrotatedW - absX - absW, width: absH, height: absW };
                         break;
                     case 180:
-                        finalRect = { x: unrotatedW - absX - absW, y: unrotatedH - absY - absH, width: absW, height: absH };
+                        finalRect = {
+                            x: unrotatedW - absX - absW,
+                            y: unrotatedH - absY - absH,
+                            width: absW,
+                            height: absH
+                        };
                         break;
                     case 270:
-                        finalRect = { x: unrotatedH - absY - absH, y: unrotatedW - absX - absW, width: absH, height: absW };
+                        finalRect = {
+                            x: unrotatedH - absY - absH,
+                            y: unrotatedW - absX - absW,
+                            width: absH,
+                            height: absW
+                        };
                         break;
-                    default: // 0 degrees
-                        finalRect = { x: absX, y: unrotatedH - absY - absH, width: absW, height: absH };
+                    default:
+                        finalRect = {
+                            x: absX,
+                            y: unrotatedH - absY - absH,
+                            width: absW,
+                            height: absH
+                        };
                         break;
                 }
 
+                // Draw visible highlight
                 page.drawRectangle({
                     ...finalRect,
                     color: fillColor,
                     opacity,
                 });
+
+                if (h.note) {
+                    // --- UPDATED: Use Highlight annotation instead of rectangle + sticky note ---
+                    const highlightRef = pdfDoc.context.register(
+                        pdfDoc.context.obj({
+                            Type: PDFName.of('Annot'),
+                            Subtype: PDFName.of('Highlight'),
+                            Rect: [finalRect.x, finalRect.y, finalRect.x + finalRect.width, finalRect.y + finalRect.height],
+                            QuadPoints: [
+                                finalRect.x, finalRect.y + finalRect.height,
+                                finalRect.x + finalRect.width, finalRect.y + finalRect.height,
+                                finalRect.x, finalRect.y,
+                                finalRect.x + finalRect.width, finalRect.y
+                            ],
+                            C: [68 / 255, 64 / 255, 59 / 255],
+                            CA: 0.2,
+                            T: PDFString.of('Note'),
+                            Contents: PDFString.of(h.note),
+                            F: AnnotationFlags.Print,
+                            M: PDFString.fromDate(new Date())
+                        })
+                    );
+
+                    // Create the popup
+                    const popup = pdfDoc.context.obj({
+                        Type: PDFName.of('Annot'),
+                        Subtype: PDFName.of('Popup'),
+                        Rect: [finalRect.x + 10, finalRect.y + 10, finalRect.x + 200, finalRect.y + 100],
+                        Parent: highlightRef,
+                        Open: false
+                    });
+
+                    annots.push(highlightRef);
+                    annots.push(popup);
+
+                }
+
             });
         }
 
+        // ---- Strokes ----
         const strokesByPage = strokes.reduce<Record<number, Stroke[]>>((acc, s) => {
             const pageNum = s.pageNumber - 1;
             (acc[pageNum] ||= []).push(s);
@@ -341,7 +292,6 @@ export async function downloadPDFWithAnnotations(
                     getRotatedCoordinates(pt.x, pt.y, width, height, rotation)
                 );
 
-
                 const strokeWidth = s.width * scale;
                 const strokeColor = rgb(68 / 255, 64 / 255, 59 / 255);
                 const strokeOpacity = 0.01;
@@ -350,7 +300,7 @@ export async function downloadPDFWithAnnotations(
                     const p1 = absPoints[i];
                     const p2 = absPoints[i + 1];
 
-                    const segments = interpolateLinePoints(p1, p2); // very dense
+                    const segments = interpolateLinePoints(p1, p2);
 
                     for (let j = 0; j < segments.length - 1; j++) {
                         const start = segments[j];
@@ -368,8 +318,6 @@ export async function downloadPDFWithAnnotations(
             });
         }
 
-
-
         const modifiedBytes = await pdfDoc.save();
         const blob = new Blob([modifiedBytes], { type: 'application/pdf' });
         const originalFilename = pdfUrl.split('/').pop() || 'document';
@@ -380,7 +328,6 @@ export async function downloadPDFWithAnnotations(
         throw err;
     }
 }
-
 // ------------------------------ PINS ------------------------------
 
 export async function downloadPDFWithPins(pdfUrl: string, pins: Pin[], scale: number = 1) {
@@ -405,30 +352,40 @@ export async function downloadPDFWithPins(pdfUrl: string, pins: Pin[], scale: nu
             (pagePins as Pin[]).forEach(pin => {
                 try {
                     // Convert percentage to absolute coordinates
-                    let x = (pin.x / 100) * width;
-                    let y = (pin.y / 100) * height;
-
-                    // PDF bottom-left origin
-                    y = height - y;
-
-                    // Scale and center pin icon
-                    const pinScale = 0.8 * scale;
-                    const scaledPinWidth = (PIN_WIDTH * pinScale) / 2;
-                    const scaledPinHeight = (PIN_HEIGHT * pinScale) / 2;
-                    x -= scaledPinWidth;
-                    y += scaledPinHeight;
-
+                    let x;
+                    let y;
                     if (rotation !== 0) {
-                        const adjusted = adjustCoordinatesForRotation(x, y, width, height, rotation);
-                        x = adjusted.x;
-                        y = adjusted.y;
+                        if (rotation === 90) {
+                            x = (pin.y / 100) * width;
+                            y = (pin.x / 100) * height;
+                        } else if (rotation === 180) {
+                            x = width - (pin.x / 100) * width;
+                            y = (pin.y / 100) * height;
+                        } else if (rotation === 270) {
+                            x = width - (pin.y / 100) * width + 12;
+                            y = height - (pin.x / 100) * height + 12;
+                        } else {
+                            x = (pin.x / 100) * width;
+                            y = height - (pin.y / 100) * height;
+                        }
+                    } else {
+                        x = (pin.x / 100) * width;
+                        y = (pin.y / 100) * height;
+                        y = height - y;
+
+                        const pinScale = 0.8 * scale;
+                        const scaledPinWidth = PIN_WIDTH * pinScale / 2;
+                        const scaledPinHeight = PIN_HEIGHT * pinScale / 2;
+
+                        x = (x - scaledPinWidth) - 2.5;
+                        y = (y + scaledPinHeight) + 5;
                     }
 
                     const { r, g, b } = hexToRgb(pin.color);
                     page.drawSvgPath(PIN_PATH, {
                         x,
                         y,
-                        scale: pinScale,
+                        scale: scale,
                         color: rgb(r / 255, g / 255, b / 255),
                         borderColor: rgb(0, 0, 0),
                         borderWidth: 1,
