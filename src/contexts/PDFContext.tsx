@@ -60,6 +60,8 @@ interface PDFContextType {
   setSelectedHighlight: (id: string | null) => void;
   recentFiles: { name: string, lastModified: Date }[];
   addRecentFile: (file: File) => void;
+  isDragMode: boolean;
+  setIsDragMode: (isDrag: boolean) => void;
 }
 
 const PDFContext = createContext<PDFContextType | undefined>(undefined);
@@ -75,6 +77,7 @@ export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedPin, setSelectedPin] = useState<string | null>(null);
   const [selectedHighlight, setSelectedHighlight] = useState<string | null>(null);
   const [recentFiles, setRecentFiles] = useState<{ name: string, lastModified: Date }[]>([]);
+  const [isDragMode, setIsDragMode] = useState(false);
 
   // Clean up object URL when component unmounts or when URL changes
   useEffect(() => {
@@ -211,7 +214,9 @@ export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         selectedHighlight,
         setSelectedHighlight,
         recentFiles,
-        addRecentFile
+        addRecentFile,
+        isDragMode,
+        setIsDragMode
       }}
     >
       {children}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Upload, Download, Pin, Settings, Menu, X
+  Upload, Download, Pin, Settings, Menu, X, Move
 } from 'lucide-react';
 import { usePDFContext } from '../contexts/PDFContext';
 import { downloadPDFWithPins, downloadPDFWithHighlights } from '../utils/pdfUtils';
@@ -13,7 +13,7 @@ interface NavbarProps {
 }
 
 const Navbar: React.FC<NavbarProps> = ({ pageRef }) => {
-  const { pdfUrl, setPDFFile, pins, highlights, addRecentFile, scale } = usePDFContext();
+  const { pdfUrl, setPDFFile, pins, highlights, addRecentFile, scale, isDragMode, setIsDragMode } = usePDFContext();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -125,6 +125,17 @@ const Navbar: React.FC<NavbarProps> = ({ pageRef }) => {
                     <span>Export Combined Pins</span>
                   </>
                 )}
+              </button>
+            )}
+
+            {pdfUrl && (
+              <button
+                className={`btn btn-secondary flex items-center ${isDragMode ? 'bg-gray-300' : ''}`}
+                onClick={() => setIsDragMode(!isDragMode)}
+                title="Toggle Drag/Pan Mode"
+              >
+                <Move className="h-4 w-4 mr-2" />
+                <span>Pan</span>
               </button>
             )}
           </div>

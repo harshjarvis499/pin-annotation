@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, degrees, LineCapStyle, PDFName, PDFArray, PDFString, AnnotationFlags, PDFNumber } from 'pdf-lib';
+import { PDFDocument, rgb, degrees, LineCapStyle, PDFName, PDFArray, PDFString, AnnotationFlags, PDFNumber, LineJoinStyle } from 'pdf-lib';
 import { saveAs } from 'file-saver';
 import { Pin, Highlight, Stroke } from '../contexts/PDFContext';
 
@@ -294,24 +294,22 @@ export async function downloadPDFWithAnnotations(
 
                 const strokeWidth = s.width * scale;
                 const strokeColor = rgb(68 / 255, 64 / 255, 59 / 255);
-                const strokeOpacity = 0.01;
+                const strokeOpacity = 0.2;
 
                 for (let i = 0; i < absPoints.length - 1; i++) {
                     const p1 = absPoints[i];
                     const p2 = absPoints[i + 1];
 
-                    const segments = interpolateLinePoints(p1, p2);
+                    const segments = interpolateLinePoints(p1, p2, 10);
 
                     for (let j = 0; j < segments.length - 1; j++) {
-                        const start = segments[j];
-                        const end = segments[j + 1];
                         page.drawLine({
-                            start,
-                            end,
-                            thickness: strokeWidth,
+                            start: segments[j],
+                            end: segments[j + 1],
                             color: strokeColor,
                             opacity: strokeOpacity,
-                            lineCap: LineCapStyle.Projecting,
+                            thickness: strokeWidth,
+                            lineCap: LineCapStyle.Butt,
                         });
                     }
                 }
@@ -418,4 +416,327 @@ function hexToRgb(hex: string) {
     const b = parseInt(hex.substring(4, 6), 16);
 
     return { r, g, b };
-} 
+}
+
+// Helper function to calculate crop area from stroke points
+export const getCropArea = (stroke: Stroke, canvasWidth: number, canvasHeight: number) => {
+    if (!stroke.points || stroke.points.length === 0) return null;
+
+    // Convert percentage coordinates to pixel coordinates
+    const pixelPoints = stroke.points.map(point => ({
+        x: (point.x / 100) * canvasWidth,
+        y: (point.y / 100) * canvasHeight
+    }));
+
+    // Find bounding box
+    const minX = Math.min(...pixelPoints.map(p => p.x));
+    const maxX = Math.max(...pixelPoints.map(p => p.x));
+    const minY = Math.min(...pixelPoints.map(p => p.y));
+    const maxY = Math.max(...pixelPoints.map(p => p.y));
+
+    // Add dynamic margin
+    const baseMargin = 15; // Base margin in pixels
+    const percentageMarginX = (maxX - minX) * 0.2;
+    const percentageMarginY = (maxY - minY) * 0.2;
+
+    const marginX = Math.max(baseMargin, percentageMarginX);
+    const marginY = Math.max(baseMargin, percentageMarginY);
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    const cropX = minX - marginX;
+    const cropY = minY - marginY;
+    const cropWidth = width + marginX * 2;
+    const cropHeight = height + marginY * 2;
+
+    // Clamp crop to canvas boundaries
+    const adjustedCrop = {
+        x: Math.max(0, cropX),
+        y: Math.max(0, cropY),
+        width: Math.min(canvasWidth - cropX, cropWidth),
+        height: Math.min(canvasHeight - cropY, cropHeight)
+    };
+
+    return adjustedCrop;
+};
+
+// Download cropped PDF with stroke
+
+function expandToAspectRatio(minX: number, minY: number, maxX: number, maxY: number, aspectW = 4, aspectH = 3, pageWidth: number, pageHeight: number) {
+    const boxW = maxX - minX;
+    const boxH = maxY - minY;
+    const boxRatio = boxW / boxH;
+    const targetRatio = aspectW / aspectH;
+
+    let newW = boxW;
+    let newH = boxH;
+
+    if (boxRatio > targetRatio) {
+        // too wide, increase height
+        newH = boxW / targetRatio;
+    } else {
+        // too tall, increase width
+        newW = boxH * targetRatio;
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    let newMinX = centerX - newW / 2;
+    let newMinY = centerY - newH / 2;
+
+    // Clamp to page boundaries
+    newMinX = Math.max(0, newMinX);
+    newMinY = Math.max(0, newMinY);
+    let newMaxX = Math.min(pageWidth, newMinX + newW);
+    let newMaxY = Math.min(pageHeight, newMinY + newH);
+
+    return {
+        minX: newMinX,
+        minY: newMinY,
+        maxX: newMaxX,
+        maxY: newMaxY,
+        width: newMaxX - newMinX,
+        height: newMaxY - newMinY,
+    };
+}
+
+
+export async function downloadCroppedPDF(pdfUrl: string, strokes: Stroke[], scale = 1) {
+    try {
+        const pdfBytes = await fetch(pdfUrl).then(res => res.arrayBuffer());
+        const originalDoc = await PDFDocument.load(pdfBytes);
+
+        console.log(strokes);
+        for (let index = 0; index < strokes.length; index++) {
+            console.log(strokes[index]);
+            const stroke = strokes[index];
+            const sourcePage = originalDoc.getPages()[stroke.pageNumber - 1];
+            const { width: pageWidth, height: pageHeight } = sourcePage.getSize();
+            const rotation = sourcePage.getRotation().angle;
+
+            const absPoints = stroke.points.map(pt =>
+                getRotatedCoordinates(pt.x, pt.y, pageWidth, pageHeight, rotation)
+            );
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            absPoints.forEach(p => {
+                if (p.x < minX) minX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y > maxY) maxY = p.y;
+            });
+
+            // Add padding
+            const padding = 20;
+            minX -= padding;
+            minY -= padding;
+            maxX += padding;
+            maxY += padding;
+
+            // Expand to 4:3 crop and center
+            const crop = expandToAspectRatio(minX, minY, maxX, maxY, 4, 3, pageWidth, pageHeight);
+
+            // Create new PDF
+            const newPdf = await PDFDocument.create();
+            const [copiedPage] = await newPdf.copyPages(originalDoc, [stroke.pageNumber - 1]);
+            newPdf.addPage(copiedPage);
+
+            // copiedPage.setCropBox(crop.minX, crop.minY, crop.width, crop.height);
+
+            const translatedPoints = absPoints.map(p => ({
+                x: p.x - crop.minX,
+                y: p.y - crop.minY
+            }));
+
+            const strokeColor = rgb(68 / 255, 64 / 255, 59 / 255);
+            const strokeOpacity = 0.2; // Increased for better visibility
+            const strokeWidth = stroke.width * scale;
+
+            console.log(strokeWidth, "strokeWidth");
+
+            for (let i = 0; i < translatedPoints.length - 1; i++) {
+                const p1 = translatedPoints[i];
+                const p2 = translatedPoints[i + 1];
+
+                const segments = interpolateLinePoints(p1, p2);
+                for (let j = 0; j < segments.length - 1; j++) {
+                    copiedPage.drawLine({
+                        start: segments[j],
+                        end: segments[j + 1],
+                        thickness: strokeWidth,
+                        color: strokeColor,
+                        opacity: strokeOpacity,
+                        lineCap: LineCapStyle.Round,
+                        lineJoin: LineJoinStyle.Round as any,
+                    });
+                }
+            }
+            const croppedBytes = await newPdf.save();
+            const blob = new Blob([croppedBytes], { type: 'application/pdf' });
+            saveAs(blob, `stroke-${index + 1}.pdf`);
+        }
+
+        console.log('Cropped stroke PDFs exported successfully');
+    } catch (err) {
+        console.error('Failed to export cropped stroke PDFs:', err);
+        throw err;
+    }
+}
+
+
+
+export const getStrokeIconPosition = (
+    points: { x: number; y: number }[],
+    rect: DOMRect
+) => {
+    if (points.length < 2) return null;
+
+    // Convert normalized points to pixel space
+    const pixelPoints = points.map(p => ({
+        x: (p.x / 100) * rect.width,
+        y: (p.y / 100) * rect.height,
+    }));
+
+    // Compute longest segment for direction
+    let maxLen = 0;
+    let baseSegment = { start: pixelPoints[0], end: pixelPoints[1] };
+
+    for (let i = 0; i < pixelPoints.length - 1; i++) {
+        const p1 = pixelPoints[i];
+        const p2 = pixelPoints[i + 1];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const len = dx * dx + dy * dy;
+        if (len > maxLen) {
+            maxLen = len;
+            baseSegment = { start: p1, end: p2 };
+        }
+    }
+
+    // Midpoint of that segment
+    const midX = (baseSegment.start.x + baseSegment.end.x) / 2;
+    const midY = (baseSegment.start.y + baseSegment.end.y) / 2;
+
+    const angle = Math.atan2(
+        baseSegment.end.y - baseSegment.start.y,
+        baseSegment.end.x - baseSegment.start.x
+    );
+
+    const offset = 16;
+
+    // Rotate 90 degrees for perpendicular
+    const offsetX = Math.cos(angle - Math.PI / 2) * offset;
+    const offsetY = Math.sin(angle - Math.PI / 2) * offset;
+
+    return {
+        x: midX + offsetX,
+        y: midY + offsetY,
+    };
+};
+
+
+
+export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[], scale = 1) => {
+    try {
+        const pdfBytes = await fetch(pdfUrl).then(res => res.arrayBuffer());
+        const pdfDoc = await PDFDocument.load(pdfBytes);
+        const pages = pdfDoc.getPages();
+
+        const { width: pageWidth, height: pageHeight } = pages[stroke[0].pageNumber - 1].getSize();
+        const rotation = pages[stroke[0].pageNumber - 1].getRotation().angle;
+
+        const absPoints = stroke[0].points.map(pt =>
+            getRotatedCoordinates(pt.x, pt.y, pageWidth, pageHeight, rotation)
+        );
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        absPoints.forEach(p => {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+        });
+
+        // Add padding
+        const padding = 30;
+        minX -= padding;
+        minY -= padding;
+        maxX += padding;
+        maxY += padding;
+
+        // Expand to 4:3 crop and center
+        const crop = expandToAspectRatio(minX, minY, maxX, maxY, 4, 6, pageWidth, pageHeight);
+
+        // ---- Strokes ----
+        const strokesByPage = stroke.reduce<Record<number, Stroke[]>>((acc, s) => {
+            const pageNum = s.pageNumber - 1;
+            (acc[pageNum] ||= []).push(s);
+            return acc;
+        }, {});
+
+        for (const [pageNumStr, pageStrokes] of Object.entries(strokesByPage)) {
+            const page = pages[parseInt(pageNumStr)];
+            if (!page) continue;
+            const { width, height } = page.getSize();
+            const rotation = page.getRotation().angle;
+
+            pageStrokes.forEach((s) => {
+                const absPoints = s.points.map((pt) =>
+                    getRotatedCoordinates(pt.x, pt.y, width, height, rotation)
+                );
+
+                const strokeWidth = s.width * scale;
+
+                // Set stroke color and opacity
+                const strokeColor = rgb(204 / 255, 204 / 255, 204 / 255); // #cccccc
+                const strokeOpacity = 0.9;
+                const jointRadius = (strokeWidth * 0.8) / 2;
+
+                // Draw joint fills *before* strokes to blend under
+                for (let i = 1; i < absPoints.length - 1; i++) {
+                    const jointPoint = absPoints[i];
+                    page.drawEllipse({
+                        x: jointPoint.x,
+                        y: jointPoint.y,
+                        xScale: jointRadius,
+                        yScale: jointRadius,
+                        color: strokeColor,
+                        opacity: strokeOpacity,
+                        borderWidth: 0,
+                    });
+                }
+
+                // Draw actual strokes
+                for (let i = 0; i < absPoints.length - 1; i++) {
+                    const p1 = absPoints[i];
+                    const p2 = absPoints[i + 1];
+
+                    const segments = interpolateLinePoints(p1, p2, 100);
+
+                    for (let j = 0; j < segments.length - 1; j++) {
+                        page.drawLine({
+                            start: segments[j],
+                            end: segments[j + 1],
+                            color: strokeColor,
+                            opacity: strokeOpacity,
+                            thickness: strokeWidth,
+                            lineCap: LineCapStyle.Butt,
+                        });
+                    }
+                }
+            });
+        }
+
+
+        pages[stroke[0].pageNumber - 1].setCropBox(crop.minX, crop.minY, crop.width, crop.height);
+        const modifiedBytes = await pdfDoc.save();
+        const blob = new Blob([modifiedBytes], { type: 'application/pdf' });
+        const originalFilename = pdfUrl.split('/').pop() || 'document';
+        const filename = originalFilename.replace('.pdf', '-with-annotations.pdf');
+        saveAs(blob, filename);
+    } catch (error) {
+        console.log(error);
+    }
+}

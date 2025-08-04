@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Trash2, ChevronLeft, ChevronRight, PinIcon } from 'lucide-react';
+import { Trash2, ChevronLeft, ChevronRight, PinIcon, PenTool } from 'lucide-react';
 import { usePDFContext } from '../contexts/PDFContext';
 import DialogModel from './DialogModel';
 import { downloadKeyPointPDF } from '../utils/keyPointPdf';
+import { donwloadKeyPointForStroke, downloadCroppedPDF } from '../utils/pdfUtils';
 
 interface AnnotationPanelProps {
   width: number;
@@ -13,8 +14,9 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
   const {
     pins, updatePin, deletePin, selectedPin, setSelectedPin,
     highlights, selectedHighlight, setSelectedHighlight, deleteHighlight,
-    currentPage, totalPages
+    strokes, deleteStroke, currentPage, totalPages, pdfUrl
   } = usePDFContext();
+  const [selectedStroke, setSelectedStroke] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -23,6 +25,7 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
   const selectedPinData = pins.find(pin => pin.id === selectedPin);
   const pagePins = pins.filter(pin => pin.pageNumber === currentPage);
   const pageHighlights = highlights.filter(h => h.pageNumber === currentPage);
+  const pageStrokes = strokes.filter(s => s.pageNumber === currentPage);
 
   const [isDialog, setIsDialog] = useState(false);
 
@@ -56,6 +59,15 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
 
   const handleDeleteHighlight = (id: string) => {
     deleteHighlight(id);
+  };
+
+  const handleDeleteStroke = (id: string) => {
+    deleteStroke(id);
+  };
+
+  const handleDownloadStroke = async (stroke: any) => {
+
+    await donwloadKeyPointForStroke(pdfUrl!, [stroke]);
   };
 
   useEffect(() => {
@@ -164,6 +176,55 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
               ))}
             </div>
           )}
+
+          <div className="p-4 border-y border-gray-200 mt-4">
+            <h3 className="font-medium">Freehand Drawings</h3>
+          </div>
+          {pageStrokes.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">
+              <p>No drawings on this page</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {pageStrokes.map(stroke => (
+                <div
+                  key={stroke.id}
+                  className={`p-4 hover:bg-gray-50 cursor-pointer ${selectedStroke === stroke.id ? 'bg-blue-100' : ''}`}
+                  onClick={() => setSelectedStroke(stroke.id)}
+                >
+                  <div className="flex items-center">
+                    <div className='flex items-center gap-2 flex-grow'>
+                      <div className='flex items-end'>
+                        <PenTool size={20} color={stroke.color} />
+                      </div>
+                      <div className="font-medium flex-grow">
+                        Drawing {stroke.id.slice(0, 8)} ({stroke.points.length} points)
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteStroke(stroke.id);
+                      }}
+                      className="mr-2"
+                    >
+                      <Trash2 color="red" size={20} />
+                    </button>
+                    <button
+                      className="p-1 rounded hover:bg-gray-200"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await handleDownloadStroke(stroke);
+                      }}
+                      title="Download Cropped PDF"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-down"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L15 2z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M12 18V12" /><path d="M9 15l3 3 3-3" /></svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 
@@ -183,6 +244,12 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
           </p>
           <p className="text-sm text-gray-500">
             {highlights.length} highlight{highlights.length !== 1 ? 's' : ''} total
+          </p>
+          <p className="text-sm text-gray-500">
+            {pageStrokes.length} drawing{pageStrokes.length !== 1 ? 's' : ''} on this page
+          </p>
+          <p className="text-sm text-gray-500">
+            {strokes.length} drawing{strokes.length !== 1 ? 's' : ''} total
           </p>
         </div>
       )}

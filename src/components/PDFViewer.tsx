@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Document, Page } from 'react-pdf';
-import { Pin as PinIcon, Plus, Minus, ChevronLeft, ChevronRight, Highlighter, Download as DownloadIcon, Pencil, Eraser } from 'lucide-react';
+import { Pin as PinIcon, Plus, Minus, ChevronLeft, ChevronRight, Highlighter, Download as DownloadIcon, Pencil, Eraser, Move } from 'lucide-react';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import '../lib/pdfjs-init';
 import { usePDFContext } from '../contexts/PDFContext';
@@ -27,7 +27,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
   const {
     pdfUrl, pins, addPin, highlights, addHighlight, currentPage, setCurrentPage,
     totalPages, setTotalPages, scale, setScale, setSelectedPin, setSelectedHighlight,
-    undoLastStroke, strokes
+    undoLastStroke, strokes, isDragMode, setIsDragMode
   } = usePDFContext();
   const [pdfDimensions, setPdfDimensions] = useState({ width: 0, height: 0 });
   const sidebarWidth = 320;
@@ -42,6 +42,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<Error | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   const [pinDetail, setPinDetail] = useState<PinDetailEntity | null>(null)
 
@@ -79,6 +81,50 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
     console.error('Error loading PDF:', error);
     setLoadError(error);
     setIsLoading(false);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragMode) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX, y: e.clientY });
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'grabbing';
+      }
+      return;
+    }
+
+    if (isHighlightingMode) {
+      handleHighlightMouseDown(e);
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isPanning && containerRef.current) {
+      const dx = e.clientX - panStart.x;
+      const dy = e.clientY - panStart.y;
+      containerRef.current.scrollLeft -= dx;
+      containerRef.current.scrollTop -= dy;
+      setPanStart({ x: e.clientX, y: e.clientY });
+      return;
+    }
+
+    if (isHighlightingMode) {
+      handleHighlightMouseMove(e);
+    }
+  };
+
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isPanning) {
+      setIsPanning(false);
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'grab';
+      }
+      return;
+    }
+
+    if (isHighlightingMode) {
+      handleHighlightMouseUp(e);
+    }
   };
 
   const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -216,7 +262,15 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
   return (
     <>
       <div className="flex flex-1 overflow-hidden">
-        <div className="pdf-container" ref={containerRef}>
+        {/* PDF Viewer Main Container */}
+        <div
+          ref={containerRef}
+          className="pdf-viewer-container flex-1 overflow-auto relative"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          style={{ cursor: isDragMode ? 'grab' : 'default' }}
+        >
           {pdfUrl && (
             <Document
               file={pdfUrl}
@@ -333,63 +387,80 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
               <ChevronRight size={18} />
             </button>
           </div>
+
+          {/* Floating Action Buttons */}
+          <div className="fixed bottom-6 left-6 flex flex-col gap-2 z-10">
+            <button
+              className={`p-3 rounded-full shadow-lg ${isHighlightingMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
+              onClick={() => { setIsHighlightingMode(!isHighlightingMode); setIsPinningMode(false); setIsMarkerMode(false); setSelectedHighlight(null); setSelectedPin(null); }}
+              title={isHighlightingMode ? 'Cancel highlighting' : 'Add a highlight'}
+            >
+              <Highlighter size={20} />
+            </button>
+            <button
+              className={`p-3 rounded-full shadow-lg ${isPinningMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
+              onClick={() => { setIsPinningMode(!isPinningMode); setIsHighlightingMode(false); setIsMarkerMode(false); setSelectedPin(null); setSelectedHighlight(null); }}
+              title={isPinningMode ? 'Cancel adding pin' : 'Add a new pin'}
+            >
+              <PinIcon size={20} />
+            </button>
+            <button
+              className={`p-3 rounded-full shadow-lg ${isMarkerMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
+              onClick={() => {
+                setIsMarkerMode(!isMarkerMode);
+                setIsPinningMode(false);
+                setIsHighlightingMode(false);
+                setSelectedPin(null);
+                setSelectedHighlight(null);
+              }}
+              title={isMarkerMode ? 'Cancel marker' : 'Freehand marker'}
+            >
+              <Pencil size={20} />
+            </button>
+            <button
+              className={`p-3 rounded-full shadow-lg ${isEraserMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
+              onClick={() => {
+                setIsEraserMode(!isEraserMode);
+                setIsMarkerMode(false);
+                setIsPinningMode(false);
+                setIsHighlightingMode(false);
+              }}
+              title={isEraserMode ? 'Cancel eraser' : 'Eraser mode'}
+            >
+              <Eraser size={20} />
+            </button>
+            <button
+              className={`p-3 rounded-full shadow-lg ${isDragMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
+              onClick={() => {
+                setIsDragMode(!isDragMode);
+                setIsPinningMode(false);
+                setIsHighlightingMode(false);
+                setIsMarkerMode(false);
+                setIsEraserMode(false);
+              }}
+              title={isDragMode ? 'Cancel Panning' : 'Pan Mode'}
+            >
+              <Move size={20} />
+            </button>
+            <button
+              className={`p-3 rounded-full shadow-lg ${isHighlightExporting ? 'bg-gray-200 text-gray-500' : 'bg-white text-gray-700'}`}
+              onClick={handleDownloadHighlightPdf}
+              disabled={(highlights.length === 0 && strokes.length === 0) || !pdfUrl || isHighlightExporting}
+              title="Download PDF with Highlights & Strokes"
+            >
+              {isHighlightExporting ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+              ) : (
+                <DownloadIcon size={20} />
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="fixed bottom-6 left-6 flex flex-col gap-2 z-10">
-          <button
-            className={`p-3 rounded-full shadow-lg ${isHighlightingMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
-            onClick={() => { setIsHighlightingMode(!isHighlightingMode); setIsPinningMode(false); setIsMarkerMode(false); setSelectedHighlight(null); setSelectedPin(null); }}
-            title={isHighlightingMode ? 'Cancel highlighting' : 'Add a highlight'}
-          >
-            <Highlighter size={20} />
-          </button>
-          <button
-            className={`p-3 rounded-full shadow-lg ${isPinningMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
-            onClick={() => { setIsPinningMode(!isPinningMode); setIsHighlightingMode(false); setIsMarkerMode(false); setSelectedPin(null); setSelectedHighlight(null); }}
-            title={isPinningMode ? 'Cancel adding pin' : 'Add a new pin'}
-          >
-            <PinIcon size={20} />
-          </button>
-          <button
-            className={`p-3 rounded-full shadow-lg ${isMarkerMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
-            onClick={() => {
-              setIsMarkerMode(!isMarkerMode);
-              setIsPinningMode(false);
-              setIsHighlightingMode(false);
-              setSelectedPin(null);
-              setSelectedHighlight(null);
-            }}
-            title={isMarkerMode ? 'Cancel marker' : 'Freehand marker'}
-          >
-            <Pencil size={20} />
-          </button>
-          <button
-            className={`p-3 rounded-full shadow-lg ${isEraserMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
-            onClick={() => {
-              setIsEraserMode(!isEraserMode);
-              setIsMarkerMode(false);
-              setIsPinningMode(false);
-              setIsHighlightingMode(false);
-            }}
-            title={isEraserMode ? 'Cancel eraser' : 'Eraser mode'}
-          >
-            <Eraser size={20} />
-          </button>
-          <button
-            className={`p-3 rounded-full shadow-lg ${isHighlightExporting ? 'bg-gray-200 text-gray-500' : 'bg-white text-gray-700'}`}
-            onClick={handleDownloadHighlightPdf}
-            disabled={(highlights.length === 0 && strokes.length === 0) || !pdfUrl || isHighlightExporting}
-            title="Download PDF with Highlights & Strokes"
-          >
-            {isHighlightExporting ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
-            ) : (
-              <DownloadIcon size={20} />
-            )}
-          </button>
-        </div>
-
+        {/* Annotation Panel */}
         <AnnotationPanel width={sidebarWidth} pageRef={pageRef} />
+
+        {/* Dialog Model */}
         <DialogModel key={nanoid()} isOpen={isOpen} onClose={handleClose} setPinDetail={setPinDetail} pinDetail={pinDetail} />
       </div>
     </>

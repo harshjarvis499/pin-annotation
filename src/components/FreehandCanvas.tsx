@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { usePDFContext } from '../contexts/PDFContext';
+import { getStrokeIconPosition } from '../utils/pdfUtils';
 
 interface FreehandCanvasProps {
   pageRef: React.RefObject<HTMLDivElement>;
@@ -9,15 +10,82 @@ interface FreehandCanvasProps {
   width?: number;
 }
 
-// Simple free-hand drawing overlay. Converts absolute pixel points to percentage coords
-// before saving the stroke to context.
+// Helper function to calculate perpendicular distance from a point to a line segment
+const perpendicularDistance = (point: { x: number; y: number }, start: { x: number; y: number }, end: { x: number; y: number }): number => {
+  const A = point.x - start.x;
+  const B = point.y - start.y;
+  const C = end.x - start.x;
+  const D = end.y - start.y;
+
+  const dot = A * C + B * D;
+  const lenSq = C * C + D * D;
+
+  if (lenSq === 0) return Math.sqrt(A * A + B * B);
+
+  const param = dot / lenSq;
+  let xx, yy;
+
+  if (param < 0) {
+    xx = start.x;
+    yy = start.y;
+  } else if (param > 1) {
+    xx = end.x;
+    yy = end.y;
+  } else {
+    xx = start.x + param * C;
+    yy = start.y + param * D;
+  }
+
+  const dx = point.x - xx;
+  const dy = point.y - yy;
+  return Math.sqrt(dx * dx + dy * dy);
+};
+
+// Douglas-Peucker algorithm to simplify a path
+const simplifyPath = (points: { x: number; y: number }[], tolerance: number = 5): { x: number; y: number }[] => {
+  if (points.length <= 2) return points;
+
+  const douglasPeucker = (points: { x: number; y: number }[], epsilon: number): { x: number; y: number }[] => {
+    if (points.length <= 2) return points;
+
+    let maxDistance = 0;
+    let maxIndex = 0;
+    const start = points[0];
+    const end = points[points.length - 1];
+
+    for (let i = 1; i < points.length - 1; i++) {
+      const distance = perpendicularDistance(points[i], start, end);
+      if (distance > maxDistance) {
+        maxDistance = distance;
+        maxIndex = i;
+      }
+    }
+
+    if (maxDistance > epsilon) {
+      const leftSegment = douglasPeucker(points.slice(0, maxIndex + 1), epsilon);
+      const rightSegment = douglasPeucker(points.slice(maxIndex), epsilon);
+      return [...leftSegment.slice(0, -1), ...rightSegment];
+    } else {
+      return [start, end];
+    }
+  };
+
+  return douglasPeucker(points, tolerance);
+};
+
+// Dynamic icon position based on stroke shape
+
+
+
+
+
+
 const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, drawActive, eraseActive, width = 12 }) => {
   const PREVIEW_COLOR = '#ffeb3b';
   const FINAL_COLOR = '#555555';
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { addStroke, deleteStroke, strokes, scale } = usePDFContext();
 
-  // Resize canvas to match page size whenever PDF resizes
   useEffect(() => {
     const pageEl = pageRef.current;
     const canvas = canvasRef.current;
@@ -36,7 +104,6 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
     return () => observer.disconnect();
   }, [pageRef, strokes]);
 
-  // Draw existing strokes for this page
   const redraw = () => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
@@ -47,6 +114,7 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
 
     const rect = pageRef.current!.getBoundingClientRect();
     const pageStrokes = strokes.filter(s => s.pageNumber === pageNumber);
+
     pageStrokes.forEach(s => {
       ctx.strokeStyle = s.color;
       ctx.globalAlpha = 0.3;
@@ -58,11 +126,32 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
         if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       });
       ctx.stroke();
+
+      // Dynamic icon position
+      const center = getStrokeIconPosition(s.points, rect);
+
+      if (center) {
+        const iconSize = 16 * scale;
+        ctx.fillStyle = '#4caf50';
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, iconSize / 2, 0, 2 * Math.PI);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2 * scale;
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.moveTo(center.x - 4 * scale, center.y);
+        ctx.lineTo(center.x - 1 * scale, center.y + 3 * scale);
+        ctx.lineTo(center.x + 4 * scale, center.y - 3 * scale);
+        ctx.stroke();
+      }
     });
+
     ctx.globalAlpha = 1;
   };
 
-  // Pointer handlers for draw / erase
   useEffect(() => {
     if (!drawActive && !eraseActive) return;
     const canvas = canvasRef.current;
@@ -76,13 +165,12 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
 
     const pointerDown = (e: PointerEvent) => {
       if (eraseActive) {
-        // detect stroke near pointer and delete
         const rect = rectProvider();
         const x = e.offsetX;
         const y = e.offsetY;
         const normX = (x / rect.width) * 100;
         const normY = (y / rect.height) * 100;
-        const threshold = 2; // percentage distance
+        const threshold = 2;
         for (const s of strokes.filter(st => st.pageNumber === pageNumber)) {
           for (const pt of s.points) {
             const dx = pt.x - normX;
@@ -94,7 +182,7 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
             }
           }
         }
-        return; // no draw when erasing
+        return;
       }
 
       drawing = true;
@@ -127,7 +215,8 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
       drawing = false;
       ctx.globalAlpha = 1;
       if (currentPoints.length > 1) {
-        addStroke({ pageNumber, points: currentPoints, color: FINAL_COLOR, width });
+        const simplifiedPoints = simplifyPath(currentPoints, 2);
+        addStroke({ pageNumber, points: simplifiedPoints, color: FINAL_COLOR, width });
       }
     };
 
@@ -142,7 +231,6 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
     };
   }, [drawActive, eraseActive, scale, pageNumber, addStroke, deleteStroke, strokes]);
 
-  // Redraw when strokes change
   useEffect(() => redraw(), [strokes, scale]);
 
   return (
