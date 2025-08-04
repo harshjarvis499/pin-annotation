@@ -729,9 +729,11 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
             });
         }
 
-
-        pages[stroke[0].pageNumber - 1].setCropBox(crop.minX, crop.minY, crop.width, crop.height);
-        const modifiedBytes = await pdfDoc.save();
+        const newPdf = await PDFDocument.create();
+        const [copiedPage] = await newPdf.copyPages(pdfDoc, [stroke[0].pageNumber - 1]);
+        copiedPage.setCropBox(crop.minX, crop.minY, crop.width, crop.height);
+        newPdf.addPage(copiedPage);
+        const modifiedBytes = await newPdf.save();
         const blob = new Blob([modifiedBytes], { type: 'application/pdf' });
         const originalFilename = pdfUrl.split('/').pop() || 'document';
         const filename = originalFilename.replace('.pdf', '-with-annotations.pdf');
