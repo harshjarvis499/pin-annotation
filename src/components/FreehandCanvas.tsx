@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { usePDFContext } from '../contexts/PDFContext';
-import { getStrokeIconPosition } from '../utils/pdfUtils';
+import { getStrokeIconPosition, svgUrlToPngBytes } from '../utils/pdfUtils';
 
 interface FreehandCanvasProps {
   pageRef: React.RefObject<HTMLDivElement>;
@@ -84,6 +84,8 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
   const PREVIEW_COLOR = '#ffeb3b';
   const FINAL_COLOR = '#555555';
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const iconRef = useRef<HTMLImageElement | null>(null);
+
   const { addStroke, deleteStroke, strokes, scale } = usePDFContext();
 
   useEffect(() => {
@@ -131,21 +133,17 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
       const center = getStrokeIconPosition(s.points, rect);
 
       if (center) {
-        const iconSize = 16 * scale;
-        ctx.fillStyle = '#4caf50';
-        ctx.globalAlpha = 0.8;
-        ctx.beginPath();
-        ctx.arc(center.x, center.y, iconSize / 2, 0, 2 * Math.PI);
-        ctx.fill();
-
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2 * scale;
-        ctx.globalAlpha = 1;
-        ctx.beginPath();
-        ctx.moveTo(center.x - 4 * scale, center.y);
-        ctx.lineTo(center.x - 1 * scale, center.y + 3 * scale);
-        ctx.lineTo(center.x + 4 * scale, center.y - 3 * scale);
-        ctx.stroke();
+        const iconSize = 20 * scale;
+        if (iconRef.current) {
+          ctx.globalAlpha = 1;
+          ctx.drawImage(
+            iconRef.current,
+            center.x - iconSize / 2,
+            (center.y - iconSize / 2),
+            iconSize,
+            iconSize
+          );
+        }
       }
     });
 
@@ -231,7 +229,27 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
     };
   }, [drawActive, eraseActive, scale, pageNumber, addStroke, deleteStroke, strokes]);
 
+
   useEffect(() => redraw(), [strokes, scale]);
+
+  useEffect(() => {
+    async function fetchIcon() {
+      const svgIconUrl = "https://jb-glass-uat-apis.jarvistechnolabs.com/pdf-pin-design/shape-icon.svg";
+      const iconPngBytes = await svgUrlToPngBytes(svgIconUrl, "#000000", 60, 60);
+
+      const blob = new Blob([iconPngBytes], { type: "image/png" });
+      const url = URL.createObjectURL(blob);
+
+      const img = new Image();
+      img.src = url;
+      img.onload = () => {
+        iconRef.current = img;
+        redraw(); // Redraw once image is loaded
+      };
+    }
+    fetchIcon();
+
+  }, []);
 
   return (
     <canvas

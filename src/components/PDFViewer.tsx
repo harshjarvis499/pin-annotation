@@ -390,7 +390,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
 
           {/* Floating Action Buttons */}
           <div className="fixed bottom-6 left-6 flex flex-col gap-2 z-10">
-            <button
+            {/* <button
               className={`p-3 rounded-full shadow-lg ${isHighlightingMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
               onClick={() => { setIsHighlightingMode(!isHighlightingMode); setIsPinningMode(false); setIsMarkerMode(false); setSelectedHighlight(null); setSelectedPin(null); }}
               title={isHighlightingMode ? 'Cancel highlighting' : 'Add a highlight'}
@@ -403,7 +403,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
               title={isPinningMode ? 'Cancel adding pin' : 'Add a new pin'}
             >
               <PinIcon size={20} />
-            </button>
+            </button> */}
             <button
               className={`p-3 rounded-full shadow-lg ${isMarkerMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
               onClick={() => {
@@ -412,16 +412,17 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
                 setIsHighlightingMode(false);
                 setSelectedPin(null);
                 setSelectedHighlight(null);
+                setIsEraserMode(false);
               }}
               title={isMarkerMode ? 'Cancel marker' : 'Freehand marker'}
             >
               <Pencil size={20} />
             </button>
-            <button
+            {/* <button
               className={`p-3 rounded-full shadow-lg ${isEraserMode ? 'bg-accent text-white' : 'bg-white text-gray-700'}`}
               onClick={() => {
                 setIsEraserMode(!isEraserMode);
-                setIsMarkerMode(false);
+                setIsMarkerMode(() => false);
                 setIsPinningMode(false);
                 setIsHighlightingMode(false);
               }}
@@ -441,8 +442,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
               title={isDragMode ? 'Cancel Panning' : 'Pan Mode'}
             >
               <Move size={20} />
-            </button>
-            <button
+            </button> */}
+            {/* <button
               className={`p-3 rounded-full shadow-lg ${isHighlightExporting ? 'bg-gray-200 text-gray-500' : 'bg-white text-gray-700'}`}
               onClick={handleDownloadHighlightPdf}
               disabled={(highlights.length === 0 && strokes.length === 0) || !pdfUrl || isHighlightExporting}
@@ -453,7 +454,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
               ) : (
                 <DownloadIcon size={20} />
               )}
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -462,7 +463,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
 
         {/* Dialog Model */}
         <DialogModel key={nanoid()} isOpen={isOpen} onClose={handleClose} setPinDetail={setPinDetail} pinDetail={pinDetail} />
-      </div>
+      </div >
     </>
   );
 };

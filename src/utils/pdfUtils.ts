@@ -157,6 +157,12 @@ export async function downloadPDFWithAnnotations(
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const pages = pdfDoc.getPages();
 
+
+        const svgIconUrl = "https://jb-glass-uat-apis.jarvistechnolabs.com/pdf-pin-design/shape-icon.svg";
+        const iconPngBytes = await svgUrlToPngBytes(svgIconUrl, "#000", 60, 60);
+        const iconImage = await pdfDoc.embedPng(iconPngBytes);
+        const iconDims = iconImage.scale(0.2); // scale image if needed
+
         const highlightsByPage = highlights.reduce<Record<number, Highlight[]>>((acc, h) => {
             const pageNum = h.pageNumber - 1;
             (acc[pageNum] ||= []).push(h);
@@ -280,39 +286,92 @@ export async function downloadPDFWithAnnotations(
             const { width, height } = page.getSize();
             const rotation = page.getRotation().angle;
 
-            pageStrokes.forEach(s => {
-                const { r, g, b } = hexToRgb(s.color);
-                const brushColor = {
-                    r: r + (255 - r) * 0.4,
-                    g: g + (255 - g) * 0.4,
-                    b: b + (255 - b) * 0.4,
-                };
-
-                const absPoints = s.points.map(pt =>
+            pageStrokes.forEach((s) => {
+                const absPoints = s.points.map((pt) =>
                     getRotatedCoordinates(pt.x, pt.y, width, height, rotation)
                 );
 
                 const strokeWidth = s.width * scale;
-                const strokeColor = rgb(68 / 255, 64 / 255, 59 / 255);
-                const strokeOpacity = 0.2;
 
+                // Set stroke color and opacity
+                const strokeColor = rgb(204 / 255, 204 / 255, 204 / 255); // #cccccc
+                const strokeOpacity = 0.9;
+                const jointRadius = (strokeWidth * 0.8) / 2;
+
+                // Draw joint fills *before* strokes to blend under
+                for (let i = 1; i < absPoints.length - 1; i++) {
+                    const jointPoint = absPoints[i];
+                    page.drawEllipse({
+                        x: jointPoint.x,
+                        y: jointPoint.y,
+                        xScale: jointRadius,
+                        yScale: jointRadius,
+                        color: strokeColor,
+                        opacity: strokeOpacity,
+                        borderWidth: 0,
+                    });
+                }
+
+                // Draw actual strokes
                 for (let i = 0; i < absPoints.length - 1; i++) {
                     const p1 = absPoints[i];
                     const p2 = absPoints[i + 1];
 
-                    const segments = interpolateLinePoints(p1, p2, 10);
+                    const segments = interpolateLinePoints(p1, p2, 100);
 
                     for (let j = 0; j < segments.length - 1; j++) {
                         page.drawLine({
                             start: segments[j],
                             end: segments[j + 1],
                             color: strokeColor,
-                            opacity: strokeOpacity,
+                            opacity: 1,
                             thickness: strokeWidth,
                             lineCap: LineCapStyle.Butt,
                         });
                     }
                 }
+
+
+                // --- Icon beside stroke ---
+                if (absPoints.length >= 2) {
+                    let maxLen = 0;
+                    let baseSegment = { start: absPoints[0], end: absPoints[1] };
+
+                    for (let i = 0; i < absPoints.length - 1; i++) {
+                        const p1 = absPoints[i];
+                        const p2 = absPoints[i + 1];
+                        const dx = p2.x - p1.x;
+                        const dy = p2.y - p1.y;
+                        const len = dx * dx + dy * dy;
+                        if (len > maxLen) {
+                            maxLen = len;
+                            baseSegment = { start: p1, end: p2 };
+                        }
+                    }
+
+                    const midX = (baseSegment.start.x + baseSegment.end.x) / 2;
+                    const midY = (baseSegment.start.y + baseSegment.end.y) / 2;
+                    const angle = Math.atan2(
+                        baseSegment.end.y - baseSegment.start.y,
+                        baseSegment.end.x - baseSegment.start.x
+                    );
+
+                    const offset = 30;
+                    const offsetX = Math.cos(angle + Math.PI / 2) * offset;
+                    const offsetY = Math.sin(angle + Math.PI / 2) * offset;
+
+                    const iconX = midX + offsetX - iconDims.width / 2;
+                    const iconY = midY + offsetY - iconDims.height / 2;
+
+                    page.drawImage(iconImage, {
+                        x: iconX - 10,
+                        y: iconY + 20,
+                        width: iconDims.width,
+                        height: iconDims.height,
+                        rotate: degrees(rotation),
+                    });
+                }
+
             });
         }
 
@@ -503,103 +562,17 @@ function expandToAspectRatio(minX: number, minY: number, maxX: number, maxY: num
 }
 
 
-export async function downloadCroppedPDF(pdfUrl: string, strokes: Stroke[], scale = 1) {
-    try {
-        const pdfBytes = await fetch(pdfUrl).then(res => res.arrayBuffer());
-        const originalDoc = await PDFDocument.load(pdfBytes);
-
-        console.log(strokes);
-        for (let index = 0; index < strokes.length; index++) {
-            console.log(strokes[index]);
-            const stroke = strokes[index];
-            const sourcePage = originalDoc.getPages()[stroke.pageNumber - 1];
-            const { width: pageWidth, height: pageHeight } = sourcePage.getSize();
-            const rotation = sourcePage.getRotation().angle;
-
-            const absPoints = stroke.points.map(pt =>
-                getRotatedCoordinates(pt.x, pt.y, pageWidth, pageHeight, rotation)
-            );
-
-            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-            absPoints.forEach(p => {
-                if (p.x < minX) minX = p.x;
-                if (p.y < minY) minY = p.y;
-                if (p.x > maxX) maxX = p.x;
-                if (p.y > maxY) maxY = p.y;
-            });
-
-            // Add padding
-            const padding = 20;
-            minX -= padding;
-            minY -= padding;
-            maxX += padding;
-            maxY += padding;
-
-            // Expand to 4:3 crop and center
-            const crop = expandToAspectRatio(minX, minY, maxX, maxY, 4, 3, pageWidth, pageHeight);
-
-            // Create new PDF
-            const newPdf = await PDFDocument.create();
-            const [copiedPage] = await newPdf.copyPages(originalDoc, [stroke.pageNumber - 1]);
-            newPdf.addPage(copiedPage);
-
-            // copiedPage.setCropBox(crop.minX, crop.minY, crop.width, crop.height);
-
-            const translatedPoints = absPoints.map(p => ({
-                x: p.x - crop.minX,
-                y: p.y - crop.minY
-            }));
-
-            const strokeColor = rgb(68 / 255, 64 / 255, 59 / 255);
-            const strokeOpacity = 0.2; // Increased for better visibility
-            const strokeWidth = stroke.width * scale;
-
-            console.log(strokeWidth, "strokeWidth");
-
-            for (let i = 0; i < translatedPoints.length - 1; i++) {
-                const p1 = translatedPoints[i];
-                const p2 = translatedPoints[i + 1];
-
-                const segments = interpolateLinePoints(p1, p2);
-                for (let j = 0; j < segments.length - 1; j++) {
-                    copiedPage.drawLine({
-                        start: segments[j],
-                        end: segments[j + 1],
-                        thickness: strokeWidth,
-                        color: strokeColor,
-                        opacity: strokeOpacity,
-                        lineCap: LineCapStyle.Round,
-                        lineJoin: LineJoinStyle.Round as any,
-                    });
-                }
-            }
-            const croppedBytes = await newPdf.save();
-            const blob = new Blob([croppedBytes], { type: 'application/pdf' });
-            saveAs(blob, `stroke-${index + 1}.pdf`);
-        }
-
-        console.log('Cropped stroke PDFs exported successfully');
-    } catch (err) {
-        console.error('Failed to export cropped stroke PDFs:', err);
-        throw err;
-    }
-}
-
-
-
 export const getStrokeIconPosition = (
     points: { x: number; y: number }[],
     rect: DOMRect
 ) => {
     if (points.length < 2) return null;
 
-    // Convert normalized points to pixel space
     const pixelPoints = points.map(p => ({
         x: (p.x / 100) * rect.width,
         y: (p.y / 100) * rect.height,
     }));
 
-    // Compute longest segment for direction
     let maxLen = 0;
     let baseSegment = { start: pixelPoints[0], end: pixelPoints[1] };
 
@@ -615,27 +588,97 @@ export const getStrokeIconPosition = (
         }
     }
 
-    // Midpoint of that segment
+    const dx = baseSegment.end.x - baseSegment.start.x;
+    const dy = baseSegment.end.y - baseSegment.start.y;
+
+    let lineType: "vertical" | "horizontal" | "diagonal";
+    if (Math.abs(dx) > Math.abs(dy)) {
+        lineType = "horizontal";
+    } else if (Math.abs(dy) > Math.abs(dx)) {
+        lineType = "vertical";
+    } else {
+        lineType = "diagonal";
+    }
+
+    console.log(`Line segment classified as: ${lineType}`);
+
     const midX = (baseSegment.start.x + baseSegment.end.x) / 2;
     const midY = (baseSegment.start.y + baseSegment.end.y) / 2;
 
-    const angle = Math.atan2(
-        baseSegment.end.y - baseSegment.start.y,
-        baseSegment.end.x - baseSegment.start.x
-    );
+    const angleRad = Math.atan2(dy, dx);
 
+    // Offset icon perpendicular
     const offset = 16;
+    let offsetX = Math.cos(angleRad - Math.PI / 2) * offset;
+    let offsetY = Math.sin(angleRad - Math.PI / 2) * offset;
 
-    // Rotate 90 degrees for perpendicular
-    const offsetX = Math.cos(angle - Math.PI / 2) * offset;
-    const offsetY = Math.sin(angle - Math.PI / 2) * offset;
+    // Flip direction if icon below the midpoint
+    const newY = midY + offsetY;
+    if (newY > midY) {
+        offsetX = -offsetX;
+        offsetY = -offsetY;
+    }
+
+    const rotationDeg = (angleRad * 180) / Math.PI;
+
+    const angleDeg = (angleRad * 180) / Math.PI;
+
+    let tiltDirection: "left-to-right" | "right-to-left" | "top-to-bottom" | "bottom-to-top";
+    let x = midX + (offsetX - 5);
+    let y = midY + offsetY;
+    if (angleDeg >= -45 && angleDeg <= 45) {
+        y -= 5
+        x += 5
+        tiltDirection = "left-to-right";
+    } else if (angleDeg > 45 && angleDeg < 135) {
+        x += 7;
+        y -= 10;
+        tiltDirection = "top-to-bottom";
+    } else if (angleDeg < -45 && angleDeg > -135) {
+        tiltDirection = "bottom-to-top";
+    } else {
+        tiltDirection = "right-to-left";
+    }
+
+    console.log(`The line is tilted: ${tiltDirection}`);
 
     return {
-        x: midX + offsetX,
-        y: midY + offsetY,
+        x,
+        y,
+        rotation: rotationDeg,
     };
 };
 
+
+
+export const svgUrlToPngBytes = async (svgUrl: string, fillColor: string, width = 100, height = 100): Promise<Uint8Array> => {
+    const svgText = await fetch(svgUrl).then(res => res.text());
+    const coloredSvg = svgText.replace(/fill="[^"]*"/g, `fill="${fillColor}"`);
+
+
+    return new Promise((resolve) => {
+        const img = new Image();
+        const blob = new Blob([coloredSvg], { type: "image/svg+xml" });
+        const url = URL.createObjectURL(blob);
+
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx?.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
+                    reader.readAsArrayBuffer(blob);
+                }
+            }, "image/png");
+        };
+
+        img.src = url;
+    });
+};
 
 
 export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[], scale = 1) => {
@@ -644,9 +687,15 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
         const pdfDoc = await PDFDocument.load(pdfBytes);
         const pages = pdfDoc.getPages();
 
+        const svgIconUrl = "https://jb-glass-uat-apis.jarvistechnolabs.com/pdf-pin-design/shape-icon.svg";
+        const iconPngBytes = await svgUrlToPngBytes(svgIconUrl, "#000", 60, 60);
+        const iconImage = await pdfDoc.embedPng(iconPngBytes);
+        const iconDims = iconImage.scale(0.2); // scale image if needed
+
         const { width: pageWidth, height: pageHeight } = pages[stroke[0].pageNumber - 1].getSize();
         const rotation = pages[stroke[0].pageNumber - 1].getRotation().angle;
 
+        console.log(rotation);
         const absPoints = stroke[0].points.map(pt =>
             getRotatedCoordinates(pt.x, pt.y, pageWidth, pageHeight, rotation)
         );
@@ -720,12 +769,79 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
                             start: segments[j],
                             end: segments[j + 1],
                             color: strokeColor,
-                            opacity: strokeOpacity,
+                            opacity: 1,
                             thickness: strokeWidth,
                             lineCap: LineCapStyle.Butt,
                         });
                     }
                 }
+
+
+                if (absPoints.length >= 2) {
+                    let maxLen = 0;
+                    let baseSegment = { start: absPoints[0], end: absPoints[1] };
+
+                    for (let i = 0; i < absPoints.length - 1; i++) {
+                        const p1 = absPoints[i];
+                        const p2 = absPoints[i + 1];
+                        const dx = p2.x - p1.x;
+                        const dy = p2.y - p1.y;
+                        const len = dx * dx + dy * dy;
+                        if (len > maxLen) {
+                            maxLen = len;
+                            baseSegment = { start: p1, end: p2 };
+                        }
+                    }
+
+                    const dx = baseSegment.end.x - baseSegment.start.x;
+                    const dy = baseSegment.end.y - baseSegment.start.y;
+
+                    const angleRad = Math.atan2(dy, dx);
+                    const angleDeg = (angleRad * 180) / Math.PI;
+
+                    const midX = (baseSegment.start.x + baseSegment.end.x) / 2;
+                    const midY = (baseSegment.start.y + baseSegment.end.y) / 2;
+
+                    const offset = 24;
+
+                    // Perpendicular to stroke
+                    let perpAngle = angleRad - Math.PI / 2;
+                    let offsetX = Math.cos(perpAngle) * offset;
+                    let offsetY = Math.sin(perpAngle) * offset;
+
+                    // ✅ Flip offset based on direction
+                    if (
+                        (angleDeg > 90 && angleDeg <= 180) ||
+                        (angleDeg < -90 && angleDeg >= -180)
+                    ) {
+                        offsetX = -offsetX;
+                        offsetY = -offsetY;
+                    }
+
+                    // Final icon position
+                    const x = midX + offsetX;
+                    const y = midY + offsetY;
+
+                    // Optional: add slight dynamic nudge
+                    const nudgeScale = 5;
+                    const nudgeX = (offsetX / offset) * nudgeScale;
+                    const nudgeY = (offsetY / offset) * nudgeScale;
+
+                    const iconX = x + nudgeX - iconDims.width / 2;
+                    const iconY = y + nudgeY - iconDims.height / 2;
+
+                    page.drawImage(iconImage, {
+                        x: iconX,
+                        y: iconY,
+                        width: iconDims.width,
+                        height: iconDims.height,
+                        rotate: degrees(rotation),
+                    });
+
+
+                }
+
+
             });
         }
 

@@ -105,7 +105,7 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
       {!isCollapsed && (
         <>
 
-          <div className="flex-1 overflow-auto">
+          {/* <div className="flex-1 overflow-auto">
             <div className="p-4 border-b border-gray-200">
               <h3 className="font-medium">Pins</h3>
             </div>
@@ -175,9 +175,9 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
                 </div>
               ))}
             </div>
-          )}
+          )} */}
 
-          <div className="p-4 border-y border-gray-200 mt-4">
+          <div className="p-4 border-y border-gray-200 ">
             <h3 className="font-medium">Freehand Drawings</h3>
           </div>
           {pageStrokes.length === 0 ? (
