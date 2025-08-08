@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { usePDFContext } from '../contexts/PDFContext';
-import { getStrokeIconPosition, svgUrlToPngBytes } from '../utils/pdfUtils';
+import { svgUrlToPngBytes } from '../utils/pdfUtils';
 
 interface FreehandCanvasProps {
   pageRef: React.RefObject<HTMLDivElement>;
@@ -129,22 +129,72 @@ const FreehandCanvas: React.FC<FreehandCanvasProps> = ({ pageRef, pageNumber, dr
       });
       ctx.stroke();
 
-      // Dynamic icon position
-      const center = getStrokeIconPosition(s.points, rect);
+      // ... inside pageStrokes.forEach(s => { ... })
 
-      if (center) {
-        const iconSize = 20 * scale;
-        if (iconRef.current) {
-          ctx.globalAlpha = 1;
-          ctx.drawImage(
-            iconRef.current,
-            center.x - iconSize / 2,
-            (center.y - iconSize / 2),
-            iconSize,
-            iconSize
-          );
+      const icon = iconRef.current;
+      if (icon && s.points.length >= 2) {
+        // Step 1: Find longest segment
+        let maxLen = 0;
+        let bestSeg = { start: s.points[0], end: s.points[1] };
+
+        for (let i = 0; i < s.points.length - 1; i++) {
+          const p1 = s.points[i];
+          const p2 = s.points[i + 1];
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const len = Math.hypot(dx, dy);
+          if (len > maxLen) {
+            maxLen = len;
+            bestSeg = { start: p1, end: p2 };
+          }
         }
+
+        // Step 2: Convert to screen coords
+        const startX = (bestSeg.start.x / 100) * rect.width;
+        const startY = (bestSeg.start.y / 100) * rect.height;
+        const endX = (bestSeg.end.x / 100) * rect.width;
+        const endY = (bestSeg.end.y / 100) * rect.height;
+
+        const midX = (startX + endX) / 2;
+        const midY = (startY + endY) / 2;
+
+        const dx = endX - startX;
+        const dy = endY - startY;
+        const lenVec = Math.hypot(dx, dy);
+        if (lenVec === 0) return;
+
+        // Step 3: Perpendicular unit vector
+        let unitPerpX = -dy / lenVec;
+        let unitPerpY = dx / lenVec;
+
+        // Step 4: Push logic for consistent outward offset
+        const iconSize = 24;
+        let offset = -24;
+
+        // Direction-aware push to avoid overlapping inward
+        if (Math.abs(dx) > Math.abs(dy)) {
+          // Horizontal segment: push downward or upward
+          if (unitPerpY < 0) offset = offset; // push upward
+        } else {
+          // Vertical segment: push right or left
+          if (unitPerpX < 0) offset = offset; // push left
+        }
+
+        const iconX = midX + unitPerpX * offset;
+        const iconY = midY + unitPerpY * offset;
+
+        // Step 5: Draw the icon
+        ctx.globalAlpha = 1;
+        ctx.drawImage(
+          icon,
+          iconX - iconSize / 2,
+          iconY - iconSize / 2,
+          iconSize,
+          iconSize
+        );
       }
+
+
     });
 
     ctx.globalAlpha = 1;

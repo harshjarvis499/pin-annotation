@@ -690,7 +690,7 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
         const svgIconUrl = "https://jb-glass-uat-apis.jarvistechnolabs.com/pdf-pin-design/shape-icon.svg";
         const iconPngBytes = await svgUrlToPngBytes(svgIconUrl, "#000", 60, 60);
         const iconImage = await pdfDoc.embedPng(iconPngBytes);
-        const iconDims = iconImage.scale(0.2); // scale image if needed
+        const iconDims = iconImage.scale(0.4); // scale image if needed
 
         const { width: pageWidth, height: pageHeight } = pages[stroke[0].pageNumber - 1].getSize();
         const rotation = pages[stroke[0].pageNumber - 1].getRotation().angle;
@@ -776,70 +776,58 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
                     }
                 }
 
-
-                if (absPoints.length >= 2) {
+                if (s.points.length >= 2) {
+                    // Find longest segment
                     let maxLen = 0;
-                    let baseSegment = { start: absPoints[0], end: absPoints[1] };
+                    let bestSeg = { start: s.points[0], end: s.points[1] };
 
-                    for (let i = 0; i < absPoints.length - 1; i++) {
-                        const p1 = absPoints[i];
-                        const p2 = absPoints[i + 1];
-                        const dx = p2.x - p1.x;
-                        const dy = p2.y - p1.y;
-                        const len = dx * dx + dy * dy;
+                    for (let i = 0; i < s.points.length - 1; i++) {
+                        const p1 = s.points[i];
+                        const p2 = s.points[i + 1];
+                        const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
                         if (len > maxLen) {
                             maxLen = len;
-                            baseSegment = { start: p1, end: p2 };
+                            bestSeg = { start: p1, end: p2 };
                         }
                     }
 
-                    const dx = baseSegment.end.x - baseSegment.start.x;
-                    const dy = baseSegment.end.y - baseSegment.start.y;
+                    // convert to rotated absolute coordinates
+                    const startAbs = getRotatedCoordinates(bestSeg.start.x, bestSeg.start.y, width, height, rotation);
+                    const endAbs = getRotatedCoordinates(bestSeg.end.x, bestSeg.end.y, width, height, rotation);
 
-                    const angleRad = Math.atan2(dy, dx);
-                    const angleDeg = (angleRad * 180) / Math.PI;
+                    // midpoint of the segment
+                    const midX = (startAbs.x + endAbs.x) / 2;
+                    const midY = (startAbs.y + endAbs.y) / 2;
 
-                    const midX = (baseSegment.start.x + baseSegment.end.x) / 2;
-                    const midY = (baseSegment.start.y + baseSegment.end.y) / 2;
+                    // perpendicular to segment
+                    const dx = endAbs.x - startAbs.x;
+                    const dy = endAbs.y - startAbs.y;
 
-                    const offset = 24;
+                    // perpendicular vector to the right
+                    const perpX = -dy;
+                    const perpY = dx;
 
-                    // Perpendicular to stroke
-                    let perpAngle = angleRad - Math.PI / 2;
-                    let offsetX = Math.cos(perpAngle) * offset;
-                    let offsetY = Math.sin(perpAngle) * offset;
+                    // normalize
+                    const lenPerp = Math.hypot(perpX, perpY);
+                    const unitPerpX = perpX / lenPerp;
+                    const unitPerpY = perpY / lenPerp;
 
-                    // ✅ Flip offset based on direction
-                    if (
-                        (angleDeg > 90 && angleDeg <= 180) ||
-                        (angleDeg < -90 && angleDeg >= -180)
-                    ) {
-                        offsetX = -offsetX;
-                        offsetY = -offsetY;
-                    }
+                    // offset from mid point
+                    const iconOffset = 16;
+                    const iconX = midX + unitPerpX * iconOffset;
+                    const iconY = midY + unitPerpY * iconOffset;
 
-                    // Final icon position
-                    const x = midX + offsetX;
-                    const y = midY + offsetY;
-
-                    // Optional: add slight dynamic nudge
-                    const nudgeScale = 5;
-                    const nudgeX = (offsetX / offset) * nudgeScale;
-                    const nudgeY = (offsetY / offset) * nudgeScale;
-
-                    const iconX = x + nudgeX - iconDims.width / 2;
-                    const iconY = y + nudgeY - iconDims.height / 2;
-
+                    // draw icon
                     page.drawImage(iconImage, {
-                        x: iconX,
-                        y: iconY,
+                        x: iconX - iconDims.width / 2,
+                        y: (iconY + (iconY * 0.02)) - iconDims.height / 2,
                         width: iconDims.width,
                         height: iconDims.height,
-                        rotate: degrees(rotation),
+                        rotate: degrees(rotation)
                     });
-
-
                 }
+
+
 
 
             });

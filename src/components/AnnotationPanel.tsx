@@ -3,7 +3,7 @@ import { Trash2, ChevronLeft, ChevronRight, PinIcon, PenTool } from 'lucide-reac
 import { usePDFContext } from '../contexts/PDFContext';
 import DialogModel from './DialogModel';
 import { downloadKeyPointPDF } from '../utils/keyPointPdf';
-import { donwloadKeyPointForStroke, downloadCroppedPDF } from '../utils/pdfUtils';
+import { donwloadKeyPointForStroke } from '../utils/pdfUtils';
 
 interface AnnotationPanelProps {
   width: number;
