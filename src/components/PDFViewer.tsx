@@ -56,7 +56,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ pageRef }) => {
     if (!pdfUrl || highlights.length === 0) return;
     try {
       setIsHighlightExporting(true);
-      await downloadPDFWithAnnotations(pdfUrl, highlights, strokes, scale);
+      // await downloadPDFWithAnnotations(pdfUrl, highlights, strokes, scale);
     } catch (err) {
       console.error('Failed to download PDF with highlights', err);
     } finally {

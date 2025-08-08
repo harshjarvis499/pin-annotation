@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { FileQuestion, Download, Pencil, Scissors } from 'lucide-react';
 import PDFViewer from './components/PDFViewer';
@@ -6,31 +6,48 @@ import Navbar from './components/Navbar';
 import WelcomeScreen from './components/WelcomeScreen';
 import PDFSplitter from './pages/PDFSplitter';
 import { usePDFContext } from './contexts/PDFContext';
-import { downloadPDFWithPins } from './utils/pdfUtils';
+import { downloadPDFWithAnnotations, downloadPDFWithHighlights, downloadPDFWithPins } from './utils/pdfUtils';
 import { downloadCombinedKeyPointsPDF } from './utils/keyPointPdf';
 
 // Create a separate navigation component to use useLocation
 const Navigation = ({ pageRef }: { pageRef: React.RefObject<HTMLDivElement> }) => {
-  const { pdfUrl, pins, scale } = usePDFContext();
+  const { pdfUrl, pins, scale, strokes } = usePDFContext();
   const location = useLocation();
+  const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
 
-  const handleExportWithPins = async () => {
-    if (!pdfUrl || pins.length === 0) return;
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleExportPDFWithStrokes = async () => {
+    if (!pdfUrl || strokes.length === 0) return;
     try {
-      await downloadPDFWithPins(pdfUrl, pins, scale);
+      await downloadPDFWithAnnotations(pdfUrl, strokes, scale);
+      setIsDropdownOpen(false);
     } catch (error) {
       console.error('Error exporting PDF:', error);
       alert('Failed to export PDF. Please try again.');
     }
   };
 
-  const handleExportCombinedKeyPoints = async () => {
-    if (!pageRef.current || pins.length === 0) return;
+  const handleExportPDFWithoutStrokes = async () => {
+    if (!pdfUrl) return;
     try {
-      await downloadCombinedKeyPointsPDF(pageRef.current, pins, 'combined-key-points.pdf');
+      await downloadPDFWithHighlights(pdfUrl, [], scale);
+      setIsDropdownOpen(false);
     } catch (error) {
-      console.error('Error exporting key points:', error);
-      alert('Failed to export key points. Please try again.');
+      console.error('Error exporting PDF:', error);
+      alert('Failed to export PDF. Please try again.');
     }
   };
 
@@ -69,27 +86,35 @@ const Navigation = ({ pageRef }: { pageRef: React.RefObject<HTMLDivElement> }) =
               </Link>
             </div>
             {isAnnotatorRoute && pdfUrl && (
-              <div className="flex space-x-2">
+              <div className="relative" ref={dropdownRef}>
                 <button
-                  onClick={handleExportWithPins}
-                  disabled={pins.length === 0}
-                  className={`btn btn-primary btn-sm flex items-center py-2 h-auto ${pins.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  title={pins.length === 0 ? 'Add pins before exporting' : 'Export PDF with pins'}
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className={`btn btn-primary btn-sm flex items-center py-2 h-auto`}
+                  title="Export PDF"
                 >
                   <Download className="h-5 w-5 mr-2" />
-                  <span className="text-sm">Export with Pins</span>
+                  <span className="text-sm">Export PDF</span>
+                  <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
-                <button
-                  onClick={handleExportCombinedKeyPoints}
-                  disabled={pins.length === 0}
-                  className={`btn btn-secondary btn-sm flex items-center py-2 h-auto ${pins.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  title={pins.length === 0 ? 'Add pins before exporting' : 'Export combined key points'}
-                >
-                  <Download className="h-5 w-5 mr-2" />
-                  <span className="text-sm">Export Key Points</span>
-                </button>
+
+                {isDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                    <button
+                      onClick={handleExportPDFWithStrokes}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                    >
+                      Export PDF with Stroke
+                    </button>
+                    <button
+                      onClick={handleExportPDFWithoutStrokes}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors border-t border-gray-200"
+                    >
+                      Export PDF without Stroke
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

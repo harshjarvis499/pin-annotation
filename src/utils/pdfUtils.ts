@@ -148,7 +148,6 @@ const getRotatedCoordinates = (
 // ------------------------------ STROKES & HIGHLIGHTS ------------------------------
 export async function downloadPDFWithAnnotations(
     pdfUrl: string,
-    highlights: Highlight[],
     strokes: Stroke[],
     scale: number = 1
 ) {
@@ -163,126 +162,130 @@ export async function downloadPDFWithAnnotations(
         const iconImage = await pdfDoc.embedPng(iconPngBytes);
         const iconDims = iconImage.scale(0.2); // scale image if needed
 
-        const highlightsByPage = highlights.reduce<Record<number, Highlight[]>>((acc, h) => {
-            const pageNum = h.pageNumber - 1;
-            (acc[pageNum] ||= []).push(h);
-            return acc;
-        }, {});
+        // const highlightsByPage = highlights.reduce<Record<number, Highlight[]>>((acc, h) => {
+        //     const pageNum = h.pageNumber - 1;
+        //     (acc[pageNum] ||= []).push(h);
+        //     return acc;
+        // }, {});
 
-        for (const [pageNumStr, pageHighlights] of Object.entries(highlightsByPage)) {
-            const page = pages[parseInt(pageNumStr)];
-            if (!page) continue;
+        // for (const [pageNumStr, pageHighlights] of Object.entries(highlightsByPage)) {
+        //     const page = pages[parseInt(pageNumStr)];
+        //     if (!page) continue;
 
-            const { width: pageWidth, height: pageHeight } = page.getSize();
-            const rotation = page.getRotation().angle;
+        //     const { width: pageWidth, height: pageHeight } = page.getSize();
+        //     const rotation = page.getRotation().angle;
 
-            if (!page.node.has(PDFName.of('Annots'))) {
-                page.node.set(PDFName.of('Annots'), pdfDoc.context.obj([]));
-            }
+        //     if (!page.node.has(PDFName.of('Annots'))) {
+        //         page.node.set(PDFName.of('Annots'), pdfDoc.context.obj([]));
+        //     }
 
-            const annots = page.node.lookup(PDFName.of('Annots'), PDFArray);
+        //     const annots = page.node.lookup(PDFName.of('Annots'), PDFArray);
 
 
-            pageHighlights.forEach(h => {
-                const fillColor = rgb(68 / 255, 64 / 255, 59 / 255);
-                const opacity = 0.5;
+        //     pageHighlights.forEach(h => {
+        //         const fillColor = rgb(68 / 255, 64 / 255, 59 / 255);
+        //         const opacity = 0.5;
 
-                const unrotatedW = (rotation === 90 || rotation === 270) ? pageHeight : pageWidth;
-                const unrotatedH = (rotation === 90 || rotation === 270) ? pageWidth : pageHeight;
+        //         const unrotatedW = (rotation === 90 || rotation === 270) ? pageHeight : pageWidth;
+        //         const unrotatedH = (rotation === 90 || rotation === 270) ? pageWidth : pageHeight;
 
-                const absX = (h.x / 100) * unrotatedW;
-                const absY = (h.y / 100) * unrotatedH;
-                const absW = (h.width / 100) * unrotatedW;
-                const absH = (h.height / 100) * unrotatedH;
+        //         const absX = (h.x / 100) * unrotatedW;
+        //         const absY = (h.y / 100) * unrotatedH;
+        //         const absW = (h.width / 100) * unrotatedW;
+        //         const absH = (h.height / 100) * unrotatedH;
 
-                let finalRect = { x: 0, y: 0, width: 0, height: 0 };
+        //         let finalRect = { x: 0, y: 0, width: 0, height: 0 };
 
-                switch (rotation) {
-                    case 90:
-                        finalRect = { x: absY, y: unrotatedW - absX - absW, width: absH, height: absW };
-                        break;
-                    case 180:
-                        finalRect = {
-                            x: unrotatedW - absX - absW,
-                            y: unrotatedH - absY - absH,
-                            width: absW,
-                            height: absH
-                        };
-                        break;
-                    case 270:
-                        finalRect = {
-                            x: unrotatedH - absY - absH,
-                            y: unrotatedW - absX - absW,
-                            width: absH,
-                            height: absW
-                        };
-                        break;
-                    default:
-                        finalRect = {
-                            x: absX,
-                            y: unrotatedH - absY - absH,
-                            width: absW,
-                            height: absH
-                        };
-                        break;
-                }
+        //         switch (rotation) {
+        //             case 90:
+        //                 finalRect = { x: absY, y: unrotatedW - absX - absW, width: absH, height: absW };
+        //                 break;
+        //             case 180:
+        //                 finalRect = {
+        //                     x: unrotatedW - absX - absW,
+        //                     y: unrotatedH - absY - absH,
+        //                     width: absW,
+        //                     height: absH
+        //                 };
+        //                 break;
+        //             case 270:
+        //                 finalRect = {
+        //                     x: unrotatedH - absY - absH,
+        //                     y: unrotatedW - absX - absW,
+        //                     width: absH,
+        //                     height: absW
+        //                 };
+        //                 break;
+        //             default:
+        //                 finalRect = {
+        //                     x: absX,
+        //                     y: unrotatedH - absY - absH,
+        //                     width: absW,
+        //                     height: absH
+        //                 };
+        //                 break;
+        //         }
 
-                // Draw visible highlight
-                page.drawRectangle({
-                    ...finalRect,
-                    color: fillColor,
-                    opacity,
-                });
+        //         // Draw visible highlight
+        //         page.drawRectangle({
+        //             ...finalRect,
+        //             color: fillColor,
+        //             opacity,
+        //         });
 
-                if (h.note) {
-                    // --- UPDATED: Use Highlight annotation instead of rectangle + sticky note ---
-                    const highlightRef = pdfDoc.context.register(
-                        pdfDoc.context.obj({
-                            Type: PDFName.of('Annot'),
-                            Subtype: PDFName.of('Highlight'),
-                            Rect: [finalRect.x, finalRect.y, finalRect.x + finalRect.width, finalRect.y + finalRect.height],
-                            QuadPoints: [
-                                finalRect.x, finalRect.y + finalRect.height,
-                                finalRect.x + finalRect.width, finalRect.y + finalRect.height,
-                                finalRect.x, finalRect.y,
-                                finalRect.x + finalRect.width, finalRect.y
-                            ],
-                            C: [68 / 255, 64 / 255, 59 / 255],
-                            CA: 0.2,
-                            T: PDFString.of('Note'),
-                            Contents: PDFString.of(h.note),
-                            F: AnnotationFlags.Print,
-                            M: PDFString.fromDate(new Date())
-                        })
-                    );
+        //         if (h.note) {
+        //             // --- UPDATED: Use Highlight annotation instead of rectangle + sticky note ---
+        //             const highlightRef = pdfDoc.context.register(
+        //                 pdfDoc.context.obj({
+        //                     Type: PDFName.of('Annot'),
+        //                     Subtype: PDFName.of('Highlight'),
+        //                     Rect: [finalRect.x, finalRect.y, finalRect.x + finalRect.width, finalRect.y + finalRect.height],
+        //                     QuadPoints: [
+        //                         finalRect.x, finalRect.y + finalRect.height,
+        //                         finalRect.x + finalRect.width, finalRect.y + finalRect.height,
+        //                         finalRect.x, finalRect.y,
+        //                         finalRect.x + finalRect.width, finalRect.y
+        //                     ],
+        //                     C: [68 / 255, 64 / 255, 59 / 255],
+        //                     CA: 0.2,
+        //                     T: PDFString.of('Note'),
+        //                     Contents: PDFString.of(h.note),
+        //                     F: AnnotationFlags.Print,
+        //                     M: PDFString.fromDate(new Date())
+        //                 })
+        //             );
 
-                    // Create the popup
-                    const popup = pdfDoc.context.obj({
-                        Type: PDFName.of('Annot'),
-                        Subtype: PDFName.of('Popup'),
-                        Rect: [finalRect.x + 10, finalRect.y + 10, finalRect.x + 200, finalRect.y + 100],
-                        Parent: highlightRef,
-                        Open: false
-                    });
+        //             // Create the popup
+        //             const popup = pdfDoc.context.obj({
+        //                 Type: PDFName.of('Annot'),
+        //                 Subtype: PDFName.of('Popup'),
+        //                 Rect: [finalRect.x + 10, finalRect.y + 10, finalRect.x + 200, finalRect.y + 100],
+        //                 Parent: highlightRef,
+        //                 Open: false
+        //             });
 
-                    annots.push(highlightRef);
-                    annots.push(popup);
+        //             annots.push(highlightRef);
+        //             annots.push(popup);
 
-                }
+        //         }
 
-            });
-        }
+        //     });
+        // }
 
-        // ---- Strokes ----
         const strokesByPage = strokes.reduce<Record<number, Stroke[]>>((acc, s) => {
             const pageNum = s.pageNumber - 1;
             (acc[pageNum] ||= []).push(s);
             return acc;
         }, {});
 
+        const strokeColor = rgb(204 / 255, 204 / 255, 204 / 255); // #cccccc
+        const strokeOpacity = 0.05; // lower to make intersections lighter
+        const strokeSegments = 1; // reduce from 100 to avoid overdraw
+
         for (const [pageNumStr, pageStrokes] of Object.entries(strokesByPage)) {
             const page = pages[parseInt(pageNumStr)];
             if (!page) continue;
+
             const { width, height } = page.getSize();
             const rotation = page.getRotation().angle;
 
@@ -292,86 +295,83 @@ export async function downloadPDFWithAnnotations(
                 );
 
                 const strokeWidth = s.width * scale;
-
-                // Set stroke color and opacity
-                const strokeColor = rgb(204 / 255, 204 / 255, 204 / 255); // #cccccc
-                const strokeOpacity = 0.9;
                 const jointRadius = (strokeWidth * 0.8) / 2;
 
-                // Draw joint fills *before* strokes to blend under
-                for (let i = 1; i < absPoints.length - 1; i++) {
-                    const jointPoint = absPoints[i];
-                    page.drawEllipse({
-                        x: jointPoint.x,
-                        y: jointPoint.y,
-                        xScale: jointRadius,
-                        yScale: jointRadius,
-                        color: strokeColor,
-                        opacity: strokeOpacity,
-                        borderWidth: 0,
-                    });
-                }
+                // // Draw joint fills *before* strokes to blend under
+                // for (let i = 1; i < absPoints.length - 1; i++) {
+                //     const jointPoint = absPoints[i];
+                //     page.drawEllipse({
+                //         x: jointPoint.x,
+                //         y: jointPoint.y,
+                //         xScale: jointRadius,
+                //         yScale: jointRadius,
+                //         color: strokeColor,
+                //         opacity: strokeOpacity,
+                //         borderWidth: 0,
+                //     });
+                // }
 
-                // Draw actual strokes
+                // Draw actual stroke lines
                 for (let i = 0; i < absPoints.length - 1; i++) {
                     const p1 = absPoints[i];
                     const p2 = absPoints[i + 1];
 
-                    const segments = interpolateLinePoints(p1, p2, 100);
+                    const segments = interpolateLinePoints(p1, p2, strokeSegments);
 
                     for (let j = 0; j < segments.length - 1; j++) {
                         page.drawLine({
                             start: segments[j],
                             end: segments[j + 1],
                             color: strokeColor,
-                            opacity: 1,
+                            opacity: strokeOpacity,
                             thickness: strokeWidth,
-                            lineCap: LineCapStyle.Butt,
+                            lineCap: LineCapStyle.Projecting, // ✅ smoother joins
                         });
                     }
                 }
 
-
-                // --- Icon beside stroke ---
-                if (absPoints.length >= 2) {
+                // === ICON PLACEMENT (unchanged) ===
+                if (s.points.length >= 2) {
                     let maxLen = 0;
-                    let baseSegment = { start: absPoints[0], end: absPoints[1] };
+                    let bestSeg = { start: s.points[0], end: s.points[1] };
 
-                    for (let i = 0; i < absPoints.length - 1; i++) {
-                        const p1 = absPoints[i];
-                        const p2 = absPoints[i + 1];
-                        const dx = p2.x - p1.x;
-                        const dy = p2.y - p1.y;
-                        const len = dx * dx + dy * dy;
+                    for (let i = 0; i < s.points.length - 1; i++) {
+                        const p1 = s.points[i];
+                        const p2 = s.points[i + 1];
+                        const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
                         if (len > maxLen) {
                             maxLen = len;
-                            baseSegment = { start: p1, end: p2 };
+                            bestSeg = { start: p1, end: p2 };
                         }
                     }
 
-                    const midX = (baseSegment.start.x + baseSegment.end.x) / 2;
-                    const midY = (baseSegment.start.y + baseSegment.end.y) / 2;
-                    const angle = Math.atan2(
-                        baseSegment.end.y - baseSegment.start.y,
-                        baseSegment.end.x - baseSegment.start.x
-                    );
+                    const startAbs = getRotatedCoordinates(bestSeg.start.x, bestSeg.start.y, width, height, rotation);
+                    const endAbs = getRotatedCoordinates(bestSeg.end.x, bestSeg.end.y, width, height, rotation);
 
-                    const offset = 30;
-                    const offsetX = Math.cos(angle + Math.PI / 2) * offset;
-                    const offsetY = Math.sin(angle + Math.PI / 2) * offset;
+                    const midX = (startAbs.x + endAbs.x) / 2;
+                    const midY = (startAbs.y + endAbs.y) / 2;
 
-                    const iconX = midX + offsetX - iconDims.width / 2;
-                    const iconY = midY + offsetY - iconDims.height / 2;
+                    const dx = endAbs.x - startAbs.x;
+                    const dy = endAbs.y - startAbs.y;
+
+                    const perpX = -dy;
+                    const perpY = dx;
+                    const lenPerp = Math.hypot(perpX, perpY);
+                    const unitPerpX = perpX / lenPerp;
+                    const unitPerpY = perpY / lenPerp;
+
+                    const iconOffset = 16;
+                    const iconX = midX + unitPerpX * iconOffset;
+                    const iconY = midY + unitPerpY * iconOffset;
 
                     page.drawImage(iconImage, {
-                        x: iconX - 10,
-                        y: iconY + 20,
+                        x: iconX - iconDims.width / 2,
+                        y: (iconY + (iconY * 0.02)) - iconDims.height / 2,
                         width: iconDims.width,
                         height: iconDims.height,
-                        rotate: degrees(rotation),
+                        rotate: degrees(rotation)
                     });
                 }
-
             });
         }
 

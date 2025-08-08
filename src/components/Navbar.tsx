@@ -85,7 +85,6 @@ const Navbar: React.FC<NavbarProps> = ({ pageRef }) => {
               <button
                 className="btn btn-secondary flex items-center"
                 onClick={exportPDF}
-                disabled={pins.length === 0 || isExporting}
               >
                 {isExporting ? (
                   <>
@@ -111,7 +110,6 @@ const Navbar: React.FC<NavbarProps> = ({ pageRef }) => {
                     setIsCombinedExporting(false);
                   }
                 }}
-                disabled={pins.length === 0 || isCombinedExporting}
                 title="Download Combined Key Points PDF"
               >
                 {isCombinedExporting ? (
@@ -173,15 +171,7 @@ const Navbar: React.FC<NavbarProps> = ({ pageRef }) => {
               id="mobile-pdf-upload"
             />
 
-            {pdfUrl && (
-              <button
-                className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-900 hover:bg-gray-100"
-                onClick={exportPDF}
-                disabled={pins.length === 0 || isExporting}
-              >
-                {isExporting ? 'Exporting...' : 'Export with Pins'}
-              </button>
-            )}
+
 
             {pdfUrl && (
               <button
