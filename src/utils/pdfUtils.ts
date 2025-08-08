@@ -160,7 +160,7 @@ export async function downloadPDFWithAnnotations(
         const svgIconUrl = "https://jb-glass-uat-apis.jarvistechnolabs.com/pdf-pin-design/shape-icon.svg";
         const iconPngBytes = await svgUrlToPngBytes(svgIconUrl, "#000", 60, 60);
         const iconImage = await pdfDoc.embedPng(iconPngBytes);
-        const iconDims = iconImage.scale(0.2); // scale image if needed
+        const iconDims = iconImage.scale(0.4); // scale image if needed
 
         // const highlightsByPage = highlights.reduce<Record<number, Highlight[]>>((acc, h) => {
         //     const pageNum = h.pageNumber - 1;
