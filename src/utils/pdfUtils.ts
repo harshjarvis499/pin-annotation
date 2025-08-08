@@ -709,14 +709,16 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
         });
 
         // Add padding
-        const padding = 30;
+        const padding = 60;
         minX -= padding;
         minY -= padding;
         maxX += padding;
         maxY += padding;
 
+        let aspectW = rotation === 0 ? 6 : 4;
+        let aspectH = rotation === 0 ? 4 : 6;
         // Expand to 4:3 crop and center
-        const crop = expandToAspectRatio(minX, minY, maxX, maxY, 4, 6, pageWidth, pageHeight);
+        const crop = expandToAspectRatio(minX, minY, maxX, maxY, aspectW, aspectH, pageWidth, pageHeight);
 
         // ---- Strokes ----
         const strokesByPage = stroke.reduce<Record<number, Stroke[]>>((acc, s) => {
@@ -725,9 +727,14 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
             return acc;
         }, {});
 
+        const strokeColor = rgb(204 / 255, 204 / 255, 204 / 255); // #cccccc
+        const strokeOpacity = 0.05; // lower to make intersections lighter
+        const strokeSegments = 1; // reduce from 100 to avoid overdraw
+
         for (const [pageNumStr, pageStrokes] of Object.entries(strokesByPage)) {
             const page = pages[parseInt(pageNumStr)];
             if (!page) continue;
+
             const { width, height } = page.getSize();
             const rotation = page.getRotation().angle;
 
@@ -737,47 +744,43 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
                 );
 
                 const strokeWidth = s.width * scale;
-
-                // Set stroke color and opacity
-                const strokeColor = rgb(204 / 255, 204 / 255, 204 / 255); // #cccccc
-                const strokeOpacity = 0.9;
                 const jointRadius = (strokeWidth * 0.8) / 2;
 
-                // Draw joint fills *before* strokes to blend under
-                for (let i = 1; i < absPoints.length - 1; i++) {
-                    const jointPoint = absPoints[i];
-                    page.drawEllipse({
-                        x: jointPoint.x,
-                        y: jointPoint.y,
-                        xScale: jointRadius,
-                        yScale: jointRadius,
-                        color: strokeColor,
-                        opacity: strokeOpacity,
-                        borderWidth: 0,
-                    });
-                }
+                // // Draw joint fills *before* strokes to blend under
+                // for (let i = 1; i < absPoints.length - 1; i++) {
+                //     const jointPoint = absPoints[i];
+                //     page.drawEllipse({
+                //         x: jointPoint.x,
+                //         y: jointPoint.y,
+                //         xScale: jointRadius,
+                //         yScale: jointRadius,
+                //         color: strokeColor,
+                //         opacity: strokeOpacity,
+                //         borderWidth: 0,
+                //     });
+                // }
 
-                // Draw actual strokes
+                // Draw actual stroke lines
                 for (let i = 0; i < absPoints.length - 1; i++) {
                     const p1 = absPoints[i];
                     const p2 = absPoints[i + 1];
 
-                    const segments = interpolateLinePoints(p1, p2, 100);
+                    const segments = interpolateLinePoints(p1, p2, strokeSegments);
 
                     for (let j = 0; j < segments.length - 1; j++) {
                         page.drawLine({
                             start: segments[j],
                             end: segments[j + 1],
                             color: strokeColor,
-                            opacity: 1,
+                            opacity: strokeOpacity,
                             thickness: strokeWidth,
-                            lineCap: LineCapStyle.Butt,
+                            lineCap: LineCapStyle.Projecting, // ✅ smoother joins
                         });
                     }
                 }
 
+                // === ICON PLACEMENT (unchanged) ===
                 if (s.points.length >= 2) {
-                    // Find longest segment
                     let maxLen = 0;
                     let bestSeg = { start: s.points[0], end: s.points[1] };
 
@@ -791,33 +794,25 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
                         }
                     }
 
-                    // convert to rotated absolute coordinates
                     const startAbs = getRotatedCoordinates(bestSeg.start.x, bestSeg.start.y, width, height, rotation);
                     const endAbs = getRotatedCoordinates(bestSeg.end.x, bestSeg.end.y, width, height, rotation);
 
-                    // midpoint of the segment
                     const midX = (startAbs.x + endAbs.x) / 2;
                     const midY = (startAbs.y + endAbs.y) / 2;
 
-                    // perpendicular to segment
                     const dx = endAbs.x - startAbs.x;
                     const dy = endAbs.y - startAbs.y;
 
-                    // perpendicular vector to the right
                     const perpX = -dy;
                     const perpY = dx;
-
-                    // normalize
                     const lenPerp = Math.hypot(perpX, perpY);
                     const unitPerpX = perpX / lenPerp;
                     const unitPerpY = perpY / lenPerp;
 
-                    // offset from mid point
                     const iconOffset = 16;
                     const iconX = midX + unitPerpX * iconOffset;
                     const iconY = midY + unitPerpY * iconOffset;
 
-                    // draw icon
                     page.drawImage(iconImage, {
                         x: iconX - iconDims.width / 2,
                         y: (iconY + (iconY * 0.02)) - iconDims.height / 2,
@@ -826,12 +821,9 @@ export const donwloadKeyPointForStroke = async (pdfUrl: string, stroke: Stroke[]
                         rotate: degrees(rotation)
                     });
                 }
-
-
-
-
             });
         }
+
 
         const newPdf = await PDFDocument.create();
         const [copiedPage] = await newPdf.copyPages(pdfDoc, [stroke[0].pageNumber - 1]);
