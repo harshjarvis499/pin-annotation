@@ -17,8 +17,10 @@ export interface Stroke {
   pageNumber: number;
   points: { x: number; y: number }[]; // percentage coordinates
   color: string;
+  draftColor?: string;
   width: number; // px at scale 1
   createdAt: Date;
+  isDraft?: boolean;
 }
 
 export interface Highlight {
@@ -41,12 +43,13 @@ interface PDFContextType {
   updatePin: (id: string, updates: Partial<Omit<Pin, 'id' | 'createdAt'>>) => void;
   deletePin: (id: string) => void;
   highlights: Highlight[];
-  strokes: Stroke[];
   addHighlight: (highlight: Omit<Highlight, 'id' | 'createdAt'>) => void;
-  addStroke: (stroke: Omit<Stroke, 'id' | 'createdAt'>) => void;
-  undoLastStroke: (pageNumber: number) => void;
   updateHighlight: (id: string, updates: Partial<Omit<Highlight, 'id' | 'createdAt'>>) => void;
   deleteHighlight: (id: string) => void;
+  strokes: Stroke[];
+  addStroke: (stroke: Omit<Stroke, 'id' | 'createdAt'>) => void;
+  updateStroke: (stroke: Stroke) => void;
+  undoLastStroke: (pageNumber: number) => void;
   deleteStroke: (id: string) => void;
   currentPage: number;
   setCurrentPage: (page: number) => void;
@@ -157,6 +160,10 @@ export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setStrokes(prev => [...prev, newStroke]);
   };
 
+  const updateStroke = (stroke: Stroke) => {
+    setStrokes(prev => prev.map(s => s.id === stroke.id ? stroke : s));
+  };
+
   const undoLastStroke = (pageNumber: number) => {
     setStrokes(prev => {
       for (let i = prev.length - 1; i >= 0; i--) {
@@ -201,6 +208,7 @@ export const PDFProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         deleteHighlight,
         strokes,
         addStroke,
+        updateStroke,
         undoLastStroke,
         deleteStroke,
         currentPage,

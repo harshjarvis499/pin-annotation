@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Trash2, ChevronLeft, ChevronRight, PinIcon, PenTool } from 'lucide-react';
-import { usePDFContext } from '../contexts/PDFContext';
+import { Trash2, ChevronLeft, ChevronRight, PinIcon, PenTool, Save } from 'lucide-react';
+import { Stroke, usePDFContext } from '../contexts/PDFContext';
 import DialogModel from './DialogModel';
 import { downloadKeyPointPDF } from '../utils/keyPointPdf';
-import { donwloadKeyPointForStroke } from '../utils/pdfUtils';
+import { donwloadKeyPointForStroke, simplifyPath } from '../utils/pdfUtils';
 
 interface AnnotationPanelProps {
   width: number;
@@ -14,7 +14,8 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
   const {
     pins, updatePin, deletePin, selectedPin, setSelectedPin,
     highlights, selectedHighlight, setSelectedHighlight, deleteHighlight,
-    strokes, deleteStroke, currentPage, totalPages, pdfUrl
+    strokes, deleteStroke, currentPage, totalPages, pdfUrl,
+    updateStroke
   } = usePDFContext();
   const [selectedStroke, setSelectedStroke] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -69,6 +70,11 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
 
     await donwloadKeyPointForStroke(pdfUrl!, [stroke]);
   };
+
+  const handleSaveStrokeAsFinal = (stroke: Stroke) => {
+    const points = simplifyPath(stroke.points, 2)
+    updateStroke({ ...stroke, points, isDraft: false, color: "#555555" });
+  }
 
   useEffect(() => {
     if (selectedPin) {
@@ -206,9 +212,18 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
                         e.stopPropagation();
                         handleDeleteStroke(stroke.id);
                       }}
-                      className="mr-2"
+                      className=" p-1 rounded hover:bg-gray-200"
                     >
                       <Trash2 color="red" size={20} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSaveStrokeAsFinal(stroke);
+                      }}
+                      className=" p-1 rounded hover:bg-gray-200"
+                    >
+                      <Save size={20} />
                     </button>
                     <button
                       className="p-1 rounded hover:bg-gray-200"
@@ -233,7 +248,7 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
           <p className="text-sm text-gray-500">
             Page {currentPage} of {totalPages}
           </p>
-          <p className="text-sm text-gray-500">
+          {/* <p className="text-sm text-gray-500">
             {pagePins.length} pin{pagePins.length !== 1 ? 's' : ''} on this page
           </p>
           <p className="text-sm text-gray-500">
@@ -244,7 +259,7 @@ const AnnotationPanel: React.FC<AnnotationPanelProps> = ({ width, pageRef }) => 
           </p>
           <p className="text-sm text-gray-500">
             {highlights.length} highlight{highlights.length !== 1 ? 's' : ''} total
-          </p>
+          </p> */}
           <p className="text-sm text-gray-500">
             {pageStrokes.length} drawing{pageStrokes.length !== 1 ? 's' : ''} on this page
           </p>
